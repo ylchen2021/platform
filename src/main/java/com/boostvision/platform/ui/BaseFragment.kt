@@ -11,8 +11,6 @@ abstract class BaseFragment: Fragment() {
 
     protected abstract fun getLayoutRes(): Int
 
-    protected abstract fun onInit(savedInstanceState: Bundle?)
-
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         var outView = inflater.inflate(getLayoutRes(), container, false)
         if (savedInstanceState != null) {
@@ -25,7 +23,6 @@ abstract class BaseFragment: Fragment() {
             }
             ft.commitAllowingStateLoss()
         }
-        onInit(savedInstanceState)
         return outView
     }
 }
