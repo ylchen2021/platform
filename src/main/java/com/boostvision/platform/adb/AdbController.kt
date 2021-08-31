@@ -71,7 +71,7 @@ object AdbController {
     }
 
     fun setStatusListener(statusListener: AdbStatusListener?) {
-        AdbController.statusListener = statusListener
+        this.statusListener = statusListener
     }
 
     fun connect(deviceIp: String, devicePort: Int) {
@@ -83,6 +83,7 @@ object AdbController {
 
     fun doConnect(deviceIp: String, devicePort: Int): Boolean {
         var errorMsg: String? = null
+        statusListener?.onAdbConnecting(deviceIp)
         if (adbCrypto == null) {
             errorMsg = "adbCrypto is null, please call init() first";
             Log.e(TAG, errorMsg)
@@ -113,10 +114,10 @@ object AdbController {
             return false
         }
 
-        AdbController.deviceIp = deviceIp
-        AdbController.devicePort = devicePort
+        this.deviceIp = deviceIp
+        this.devicePort = devicePort
         connected = true
-        statusListener?.onAdbConnected()
+        statusListener?.onAdbConnected(deviceIp)
 
 
         // Start the receiving thread
@@ -153,7 +154,7 @@ object AdbController {
             adbConnection?.close()
             adbConnection = null
             connected = false
-            statusListener?.onAdbDisconnected()
+            statusListener?.onAdbDisconnected(deviceIp)
         }
     }
 
@@ -211,8 +212,9 @@ object AdbController {
     )
 
     interface AdbStatusListener {
-        fun onAdbConnected()
-        fun onAdbDisconnected()
+        fun onAdbConnecting(ip: String)
+        fun onAdbConnected(ip: String)
+        fun onAdbDisconnected(ip: String)
         fun onError(errorMsg: String)
     }
 }

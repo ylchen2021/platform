@@ -45,7 +45,7 @@ abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList
             }
 
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                return dataList[oldItemPosition] == newDataList[newItemPosition]
+                return false
             }
         })
     }
