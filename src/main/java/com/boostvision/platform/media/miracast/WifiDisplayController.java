@@ -34,6 +34,7 @@ import android.net.wifi.p2p.WifiP2pManager.GroupInfoListener;
 import android.net.wifi.p2p.WifiP2pManager.PeerListListener;
 import android.net.wifi.p2p.WifiP2pWfdInfo;
 import android.os.Handler;
+import android.os.HandlerThread;
 import android.util.Log;
 import android.view.Surface;
 import java.net.Inet4Address;
@@ -42,10 +43,11 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 
-final class WifiDisplayController {
+public class WifiDisplayController {
     private static final String TAG = "WifiDisplayController";
-    private static final boolean DEBUG = false;
+    private static final boolean DEBUG = true;
 
     private static final int DEFAULT_CONTROL_PORT = 7236;
     private static final int MAX_THROUGHPUT = 50;
@@ -73,9 +75,6 @@ final class WifiDisplayController {
     private WifiP2pManager mWifiP2pManager;
     private Channel mWifiP2pChannel;
 
-    private boolean mWifiP2pEnabled;
-    private boolean mWfdEnabled;
-    private boolean mWfdEnabling;
     private NetworkInfo mNetworkInfo;
 
     private final ArrayList<WifiP2pDevice> mAvailableWifiDisplayPeers =
@@ -124,11 +123,13 @@ final class WifiDisplayController {
 
     private WifiP2pDevice mThisDevice;
 
-    public WifiDisplayController(Context context, Handler handler, Listener listener) {
-        mContext = context;
-        mHandler = handler;
-        mListener = listener;
+    private HandlerThread wifiDisplayCallbackThread = new HandlerThread("wifidisplaycallback");
 
+    public WifiDisplayController(Context context, Listener listener) {
+        wifiDisplayCallbackThread.start();
+        mHandler = new Handler(wifiDisplayCallbackThread.getLooper());
+        mContext = context;
+        mListener = listener;
         IntentFilter intentFilter = new IntentFilter();
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION);
         intentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION);
@@ -188,7 +189,7 @@ final class WifiDisplayController {
     }
 
     private void updateScanState() {
-        if (mScanRequested && mWfdEnabled && mDesiredDevice == null) {
+        if (mScanRequested && mDesiredDevice == null) {
             if (!mDiscoverPeersInProgress) {
                 Log.i(TAG, "Starting Wifi display scan.");
                 mDiscoverPeersInProgress = true;
@@ -281,7 +282,7 @@ final class WifiDisplayController {
                 }
 
                 if (mDiscoverPeersInProgress) {
-                    //andleScanResults();
+                    handleScanResults();
                 }
             }
         });
@@ -292,6 +293,15 @@ final class WifiDisplayController {
             @Override
             public void run() {
                 mListener.onScanStarted();
+            }
+        });
+    }
+
+    private void handleScanResults() {
+        mHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                mListener.onScanResults(mAvailableWifiDisplayPeers);
             }
         });
     }
@@ -323,12 +333,6 @@ final class WifiDisplayController {
                         + describeWifiP2pDevice(device) + " and not part way through "
                         + "connecting to a different device.");
             }
-            return;
-        }
-
-        if (!mWfdEnabled) {
-            Log.i(TAG, "Ignoring request to connect to Wifi display because the "
-                    +" feature is currently disabled: " + device.deviceName);
             return;
         }
 
@@ -557,7 +561,6 @@ final class WifiDisplayController {
     }
 
     private void handleStateChanged(boolean enabled) {
-        mWifiP2pEnabled = enabled;
         if (enabled) {
             retrieveWifiP2pManagerAndChannel();
         }
@@ -576,7 +579,7 @@ final class WifiDisplayController {
     @SuppressLint("MissingPermission")
     private void handleConnectionChanged(NetworkInfo networkInfo) {
         mNetworkInfo = networkInfo;
-        if (mWfdEnabled && networkInfo.isConnected()) {
+        if (networkInfo.isConnected()) {
             if (mDesiredDevice != null) {
                 mWifiP2pManager.requestGroupInfo(mWifiP2pChannel, new GroupInfoListener() {
                     @Override
@@ -623,9 +626,7 @@ final class WifiDisplayController {
             // After disconnection for a group, for some reason we have a tendency
             // to get a peer change notification with an empty list of peers.
             // Perform a fresh scan.
-            if (mWfdEnabled) {
-                requestPeers();
-            }
+            requestPeers();
         }
     }
 
@@ -779,6 +780,7 @@ final class WifiDisplayController {
      */
     public interface Listener {
         void onScanStarted();
+        void onScanResults(List<WifiP2pDevice> deviceList);
         void onScanFinished();
     }
 }

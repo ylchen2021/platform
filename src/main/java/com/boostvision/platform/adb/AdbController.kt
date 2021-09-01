@@ -26,14 +26,13 @@ object AdbController {
     private var deviceIp = ""
     private var devicePort = 0
     private var statusListener: AdbStatusListener? = null
-    private var uiHandler = Handler(Looper.getMainLooper())
     private var readThread: Thread? = null
 
     private var MSG_CONNECT = 1
     private var MSG_DISCONNECT = 2
     private var MSG_COMMAND = 3
 
-    fun init(context: Context) {
+    fun init(context: Context, statusListener: AdbStatusListener) {
         adbThread.start()
         adbHandler = Handler(adbThread.looper) {
             when (it.what) {
@@ -62,16 +61,14 @@ object AdbController {
             true
         }
         adbCrypto = setupCrypto(context.filesDir, "pub.key", "priv.key")
+        this.statusListener = statusListener
     }
 
     fun release() {
         disConnect()
         adbHandler?.removeCallbacksAndMessages(null)
         adbThread.looper.quit()
-    }
-
-    fun setStatusListener(statusListener: AdbStatusListener?) {
-        this.statusListener = statusListener
+        statusListener = null
     }
 
     fun connect(deviceIp: String, devicePort: Int) {
@@ -201,9 +198,7 @@ object AdbController {
     }
 
     private fun notifyError(errorMsg: String) {
-        uiHandler.post {
-            statusListener?.onError(errorMsg)
-        }
+        statusListener?.onError(errorMsg)
     }
 
     data class AdbConnectParam(
