@@ -20,7 +20,7 @@ object AdbController {
     private var adbCrypto: AdbCrypto? = null
     private var adbStream: AdbStream? = null
     private var adbConnection: AdbConnection? = null
-    private var adbThread = HandlerThread("adbThread")
+    private var adbThread = HandlerThread("adb_thread")
     private var adbHandler: Handler? = null
     private var connected = false
     private var deviceIp = ""
@@ -78,7 +78,7 @@ object AdbController {
         adbHandler?.sendMessage(msg)
     }
 
-    fun doConnect(deviceIp: String, devicePort: Int): Boolean {
+    private fun doConnect(deviceIp: String, devicePort: Int): Boolean {
         var errorMsg: String? = null
         statusListener?.onAdbConnecting(deviceIp)
         if (adbCrypto == null) {
