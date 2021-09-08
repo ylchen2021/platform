@@ -1,6 +1,5 @@
 package com.boostvision.platform.media.miracast.rtsp
 
-import android.os.Build
 import android.util.Log
 import com.boostvision.platform.utils.DeviceUtils
 import com.boostvision.platform.utils.TimeUtils
@@ -8,12 +7,10 @@ import java.io.BufferedReader
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.OutputStream
-import java.lang.StringBuilder
 import java.net.*
 import java.util.*
-import java.util.regex.Matcher
 import java.util.regex.Pattern
-import kotlin.text.StringBuilder
+
 
 class RtspServer(private val port: Int){
 
@@ -169,7 +166,7 @@ class RtspServer(private val port: Int){
         override fun run() {
             Log.i(TAG, "RTSP server listening on port " + mServer.localPort)
             var clientSocket = mServer.accept()
-            WorkerThread(clientSocket).start()
+            RtspThread(clientSocket).start()
         }
 
         fun kill() {
@@ -185,7 +182,7 @@ class RtspServer(private val port: Int){
     }
 
     // One thread per client
-    class WorkerThread(client: Socket) : Thread(), Runnable {
+    class RtspThread(client: Socket) : Thread(), Runnable {
         private val mClient = client
         private val mOutput: OutputStream = client.getOutputStream()
         private val mInput: BufferedReader = BufferedReader(InputStreamReader(client.getInputStream()))
@@ -197,6 +194,11 @@ class RtspServer(private val port: Int){
         private val mSession = Session()
         private var progress = Progress.Listening
         private var cseq: Int = 0
+
+        private var mChosenRTPPort: Int = -1
+        private var audioSupport = false
+        private var mUsingPCMAudio = false
+        private var playbackSessionID = -1
 
         override fun run() {
             Log.i(TAG, "Connection from " + mClient.inetAddress.hostAddress)
@@ -240,20 +242,28 @@ class RtspServer(private val port: Int){
                     handleM1Response(response)
                 Progress.M3_sent ->
                     handleM3Response(response)
-            }
-        }
-
-        private fun processRequest(request: Request) {
-            when (progress) {
-                Progress.M1_sent -> {
-                    handleM2Request(request)
-                    sendM3Request()
-                    progress = Progress.M3_sent
+                Progress.M4_sent ->
+                    handleM4Response(response)
+                Progress.M5_sent ->
+                    handleM5Response(response)
+                else -> {
+                    handleOtherResponse(response)
                 }
             }
         }
 
-        private fun handleM2Request(request: Request) {
+        private fun processRequest(request: Request) {
+            when (request.method) {
+                "OPTIONS" ->
+                    handleOptionsRequest(request)
+                "SETUP" ->
+                    handleSetupRequest(request)
+                else ->
+                    sendErrorResponse("405 Method Not Allowed", cseq)
+            }
+        }
+
+        private fun handleOptionsRequest(request: Request) {
             if (request.method != "OPTIONS"){
                 return
             }
@@ -262,6 +272,30 @@ class RtspServer(private val port: Int){
             response.append(commonResponseParams(cseq))
             response.append("Public: org.wfa.wfd1.0, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER\r\n\r\n")
             outputSend(request.toString())
+
+            sendM3Request()
+            progress = Progress.M3_sent
+        }
+
+        private fun handleSetupRequest(request: Request) {
+            if (playbackSessionID != -1) {
+                sendErrorResponse( "400 Bad Request", cseq)
+                return
+            }
+
+            var transport = request.headers["transport"]
+            if (transport == null) {
+                sendErrorResponse( "400 Bad Request", cseq)
+            }
+
+
+        }
+
+        private fun sendErrorResponse(errorDetail: String, cseq: Int) {
+            var response = StringBuilder("RTSP/1.0 $errorDetail\r\n")
+            response.append(commonResponseParams(cseq))
+            response.append("\r\n")
+            outputSend(response.toString())
         }
 
         private fun sendM1Request() {
@@ -284,6 +318,37 @@ class RtspServer(private val port: Int){
             request.append("Content-Type: text/parameters\r\n");
             request.append("Content-Length: ${body.length}}\r\n")
             request.append(body)
+            outputSend(request.toString())
+        }
+
+        private fun sendM4Request() {
+            var body = """wfd_video_formats: 28 00 02 02 00000020 00000000 00000000 00 0000 0000 00 none none\r\n
+            wfd_audio_codecs: ${if (mUsingPCMAudio) "LPCM 00000002 00" else "AAC 00000001 00"}\r\n
+            wfd_presentation_URL: rtsp://${mClient.localAddress}/wfd1.0/streamid=0 none\r\n
+            wfd_client_rtp_ports: RTP/AVP/UDP;unicast $mChosenRTPPort 0 mode=play\r\n"""
+
+            var request = StringBuilder("SET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\r\n")
+            request.append(commonResponseParams(cseq))
+
+            request.append("Content-Type: text/parameters\r\n")
+            request.append("Content-Length: ${body.length}\r\n")
+            request.append("\r\n")
+            request.append(body)
+
+            outputSend(request.toString())
+        }
+
+        private fun sendTriggerRequest(triggerType: String) {
+            var body = "wfd_trigger_method: $triggerType\r\n"
+
+            var request = StringBuilder("SET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\n")
+            request.append(commonResponseParams(cseq))
+
+            request.append("Content-Type: text/parameters\r\n")
+            request.append("Content-Length: ${body.length}\r\n")
+            request.append("\r\n")
+            request.append(body)
+
             outputSend(request.toString())
         }
 
@@ -312,16 +377,50 @@ class RtspServer(private val port: Int){
 
         }
 
+        private fun handleM4Response(response: Response) {
+            if (response.status != 200) {
+                return
+            }
+            sendTriggerRequest("SETUP")
+            progress = Progress.M5_sent
+        }
+
+        private fun handleM5Response(response: Response) {
+            if (response.status != 200) {
+                return
+            }
+        }
+
         private fun handleM3Response(response: Response) {
+            if (response.status != 200){
+                return
+            }
+
+            var wfd_client_rtp_ports = response.headers["wfd_client_rtp_ports"]
+            val portRegex = Pattern.compile("RTP/AVP/UDP;unicast (\\d+) (\\d+) mode=play", Pattern.CASE_INSENSITIVE)
+            var matcher = portRegex.matcher(wfd_client_rtp_ports)
+            matcher.find()
+            mChosenRTPPort = matcher.group(1).toInt()
+
+            var audio_codecs = response.headers["wfd_audio_codecs"]
+            if (audio_codecs == null || audio_codecs == "none") {
+                audioSupport = false
+            } else {
+                var supportAAC = audio_codecs.substring(audio_codecs.indexOf("AAC ")+4, audio_codecs.indexOf("AAC ")+12).toInt() == 1
+                var supportLPCM = audio_codecs.substring(audio_codecs.indexOf("LPCM ")+5, audio_codecs.indexOf("AAC ")+13).toInt() == 2
+                if (supportAAC) {
+                    mUsingPCMAudio = false
+                } else if (supportLPCM){
+                    mUsingPCMAudio = true
+                }
+            }
+
+            sendM4Request()
+            progress = Progress.M4_sent
+        }
+
+        private fun handleOtherResponse(response: Response) {
 
         }
-    }
-
-    private fun processRequest() {
-
-    }
-
-    private fun processResponse() {
-
     }
 }
