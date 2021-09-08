@@ -1,5 +1,6 @@
 package com.boostvision.platform.ui
 
+import android.content.DialogInterface
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
@@ -9,6 +10,7 @@ import androidx.fragment.app.DialogFragment
 import com.boostvision.platform.utils.UIUtils
 
 abstract class BaseDialog protected constructor() : DialogFragment() {
+    private var onDismissCallback: (()->Unit)? = null
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         dialog?.setCanceledOnTouchOutside(false)
         dialog?.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -41,6 +43,22 @@ abstract class BaseDialog protected constructor() : DialogFragment() {
 
     protected open fun getWidthPaddingDp(): Int {
         return 15
+    }
+
+    fun setOnDismissCallback(callback: (()->Unit)) {
+        onDismissCallback = callback
+    }
+
+    override fun onDismiss(dialog: DialogInterface) {
+        super.onDismiss(dialog)
+
+        onDismissCallback?.invoke()
+    }
+
+    override fun dismiss() {
+        if (dialog?.isShowing == true) {
+            super.dismiss()
+        }
     }
 
     override fun onStart() {

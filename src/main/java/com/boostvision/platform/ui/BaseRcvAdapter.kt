@@ -3,11 +3,15 @@ package com.boostvision.platform.ui
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.AdapterView.OnItemClickListener
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 
+
 abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList:List<T>):
     RecyclerView.Adapter<BaseViewHolder?>() {
+
+    private var onItemClickListener: ((T)->Unit)? = null
 
     protected abstract fun onBindView(itemView: View, position: Int, data: T)
 
@@ -18,11 +22,19 @@ abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList
 
     override fun onBindViewHolder(holder: BaseViewHolder, position: Int) {
         onBindView(holder.itemView, position, dataList[position])
+        holder.itemView.setOnClickListener {
+            onItemClickListener?.invoke(dataList[position])
+        }
     }
 
     override fun getItemCount(): Int {
         return dataList.size
     }
+
+    fun setOnItemClickListener(listener: ((T)->Unit)) {
+        onItemClickListener = listener
+    }
+
 
     fun setDatas(newList: List<T>) {
         val diff = calculateDiff(newList)
