@@ -3,16 +3,20 @@ package com.boostvision.platform.adb
 import android.content.Context
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.Looper
 import android.os.Message
 import android.util.Base64
 import android.util.Log
+import com.boostvision.platform.utils.Logger
 import com.cgutman.adblib.AdbBase64
 import com.cgutman.adblib.AdbConnection
 import com.cgutman.adblib.AdbCrypto
 import com.cgutman.adblib.AdbStream
 import java.io.File
+import java.io.IOException
+import java.io.UnsupportedEncodingException
+import java.lang.StringBuilder
 import java.net.Socket
+import java.nio.charset.Charset
 
 object AdbController {
     private const val TAG = "AdbController"
@@ -25,14 +29,14 @@ object AdbController {
     private var connected = false
     private var deviceIp = ""
     private var devicePort = 0
-    private var statusListener: AdbStatusListener? = null
+    private var statusListeners: MutableList<AdbStatusListener> = arrayListOf()
     private var readThread: Thread? = null
 
     private var MSG_CONNECT = 1
     private var MSG_DISCONNECT = 2
     private var MSG_COMMAND = 3
 
-    fun init(context: Context, statusListener: AdbStatusListener) {
+    fun init(context: Context) {
         adbThread.start()
         adbHandler = Handler(adbThread.looper) {
             when (it.what) {
@@ -47,28 +51,39 @@ object AdbController {
 
                     val command = it.obj as String
                     if (adbStream?.isClosed == true) {
-                        disConnect()
+                        disconnect()
                         notifyError("连接已断开，请重新连接")
                         connected = false
                         true
                     }
+                    Logger.d(TAG, "(request)response=${command}")
                     adbStream?.write(command.toByteArray())
                 }
                 MSG_DISCONNECT -> {
-                    doDisConnect()
+                    doDisconnect()
                 }
             }
             true
         }
         adbCrypto = setupCrypto(context.filesDir, "pub.key", "priv.key")
-        this.statusListener = statusListener
     }
 
     fun release() {
-        disConnect()
+        disconnect()
         adbHandler?.removeCallbacksAndMessages(null)
         adbThread.looper.quit()
-        statusListener = null
+    }
+
+    fun addStatusListener(listener: AdbStatusListener) {
+        if (!statusListeners.contains(listener)) {
+            statusListeners.add(listener)
+        }
+    }
+
+    fun removeStatusListener(listener: AdbStatusListener) {
+        if (statusListeners.contains(listener)) {
+            statusListeners.remove(listener)
+        }
     }
 
     fun connect(deviceIp: String, devicePort: Int) {
@@ -80,7 +95,9 @@ object AdbController {
 
     private fun doConnect(deviceIp: String, devicePort: Int): Boolean {
         var errorMsg: String? = null
-        statusListener?.onAdbConnecting(deviceIp)
+        statusListeners.forEach {
+            it.onAdbConnecting(deviceIp)
+        }
         if (adbCrypto == null) {
             errorMsg = "adbCrypto is null, please call init() first";
             Log.e(TAG, errorMsg)
@@ -94,7 +111,7 @@ object AdbController {
                 Log.i(TAG, errorMsg)
                 return false
             }
-            disConnect()
+            disconnect()
         }
 
         try {
@@ -107,56 +124,64 @@ object AdbController {
             errorMsg = "connect error!"
             Log.i(TAG, errorMsg, e)
             notifyError(errorMsg)
-            disConnect()
+            disconnect()
             return false
         }
 
         this.deviceIp = deviceIp
         this.devicePort = devicePort
         connected = true
-        statusListener?.onAdbConnected(deviceIp)
-
+        statusListeners.forEach {
+            it.onAdbConnected(deviceIp)
+        }
 
         // Start the receiving thread
-//        readThread = Thread(Runnable {
-//            while (adbStream?.isClosed == false) try {
-//                // Print each thing we read from the shell stream
-//                //print(String(adbStream!!.read(), Charset.forName("US-ASCII")))
-//            } catch (e: UnsupportedEncodingException) {
-//                e.printStackTrace()
-//                return@Runnable
-//            } catch (e: InterruptedException) {
-//                e.printStackTrace()
-//                return@Runnable
-//            } catch (e: IOException) {
-//                e.printStackTrace()
-//                return@Runnable
-//            }
-//        })
-//        readThread?.start()
+        readThread = Thread(Runnable {
+            var responseBuilder = StringBuilder()
+            while (adbStream?.isClosed == false){
+                try {
+                    // Print each thing we read from the shell stream
+                    var response = String(adbStream!!.read(), Charset.forName("US-ASCII"))
+                    if (!response.endsWith("/ \$ ")) {
+                        responseBuilder.append(response)
+                    } else {
+                        responseBuilder.append(response)
+                        var fullResponse = responseBuilder.toString()
+                        Logger.d(TAG, "response=${fullResponse}")
+                        statusListeners.forEach {
+                            it.onResponse(fullResponse)
+                        }
+                        responseBuilder = StringBuilder()
+                    }
+
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    return@Runnable
+                }
+            }
+        })
+        readThread?.start()
 
         return true
     }
 
-    fun disConnect() {
+    fun disconnect() {
         var msg = Message.obtain()
         msg.what = MSG_DISCONNECT
         adbHandler?.sendMessage(msg)
     }
 
-    fun doDisConnect() {
+    fun doDisconnect() {
         if (connected) {
             adbStream?.close()
             adbStream = null
             adbConnection?.close()
             adbConnection = null
             connected = false
-            statusListener?.onAdbDisconnected(deviceIp)
+            statusListeners.forEach {
+                it.onAdbDisconnected(deviceIp)
+            }
         }
-    }
-
-    fun isConnected(): Boolean {
-        return connected
     }
 
     fun sendCommand(command: String) {
@@ -198,7 +223,9 @@ object AdbController {
     }
 
     private fun notifyError(errorMsg: String) {
-        statusListener?.onError(errorMsg)
+        statusListeners.forEach {
+            it.onError(errorMsg)
+        }
     }
 
     data class AdbConnectParam(
@@ -211,5 +238,6 @@ object AdbController {
         fun onAdbConnected(ip: String)
         fun onAdbDisconnected(ip: String)
         fun onError(errorMsg: String)
+        fun onResponse(msg: String)
     }
 }
