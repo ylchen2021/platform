@@ -37,6 +37,9 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.util.Log;
 import android.view.Surface;
+
+import com.boostvision.platform.media.miracast.rtsp.RtspServer;
+
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -123,7 +126,7 @@ public class WifiDisplayController {
 
     private WifiP2pDevice mThisDevice;
 
-    private HandlerThread wifiDisplayCallbackThread = new HandlerThread("wifidisplaycallback");
+    private HandlerThread wifiDisplayCallbackThread = new HandlerThread("wifi_display");
 
     public WifiDisplayController(Context context, Listener listener) {
         wifiDisplayCallbackThread.start();
@@ -267,9 +270,12 @@ public class WifiDisplayController {
             @Override
             public void onPeersAvailable(WifiP2pDeviceList peers) {
                 if (DEBUG) {
-                    Log.d(TAG, "Received list of peers.");
+                    Log.d(TAG, "Received list of peers. mAvailableWifiDisplayPeers.size="+mAvailableWifiDisplayPeers.size());
                 }
 
+                if (mAvailableWifiDisplayPeers.size() > 0) {
+                    return;
+                }
                 mAvailableWifiDisplayPeers.clear();
                 for (WifiP2pDevice device : peers.getDeviceList()) {
                     if (DEBUG) {
@@ -520,43 +526,46 @@ public class WifiDisplayController {
             Log.i(TAG, "Listening for RTSP connection on " + iface
                     + " from Wifi display: " + mConnectedDevice.deviceName);
 
-            mRemoteDisplay = RemoteDisplayReflect.listen(iface, new RemoteDisplayReflect.Listener() {
-                @Override
-                public void onDisplayConnected(Surface surface,
-                        int width, int height, int flags, int session) {
-                    if (mConnectedDevice == oldDevice && !mRemoteDisplayConnected) {
-                        Log.i(TAG, "Opened RTSP connection with Wifi display: "
-                                + mConnectedDevice.deviceName);
-                        mRemoteDisplayConnected = true;
-                        mHandler.removeCallbacks(mRtspTimeout);
-                    }
-                }
+            RtspServer server = new RtspServer(iface);
+            server.startListening();
 
-                @Override
-                public void onDisplayDisconnected() {
-                    if (mConnectedDevice == oldDevice) {
-                        Log.i(TAG, "Closed RTSP connection with Wifi display: "
-                                + mConnectedDevice.deviceName);
-                        mHandler.removeCallbacks(mRtspTimeout);
-                        disconnect();
-                    }
-                }
-
-                @Override
-                public void onDisplayError(int error) {
-                    if (mConnectedDevice == oldDevice) {
-                        Log.i(TAG, "Lost RTSP connection with Wifi display due to error "
-                                + error + ": " + mConnectedDevice.deviceName);
-                        mHandler.removeCallbacks(mRtspTimeout);
-                        handleConnectionFailure(false);
-                    }
-                }
-            }, mHandler, mContext.getPackageName());
-
-            // Use extended timeout value for certification, as some tests require user inputs
-            int rtspTimeout = RTSP_TIMEOUT_SECONDS;
-
-            mHandler.postDelayed(mRtspTimeout, rtspTimeout * 1000);
+//            mRemoteDisplay = RemoteDisplayReflect.listen(iface, new RemoteDisplayReflect.Listener() {
+//                @Override
+//                public void onDisplayConnected(Surface surface,
+//                        int width, int height, int flags, int session) {
+//                    if (mConnectedDevice == oldDevice && !mRemoteDisplayConnected) {
+//                        Log.i(TAG, "Opened RTSP connection with Wifi display: "
+//                                + mConnectedDevice.deviceName);
+//                        mRemoteDisplayConnected = true;
+//                        mHandler.removeCallbacks(mRtspTimeout);
+//                    }
+//                }
+//
+//                @Override
+//                public void onDisplayDisconnected() {
+//                    if (mConnectedDevice == oldDevice) {
+//                        Log.i(TAG, "Closed RTSP connection with Wifi display: "
+//                                + mConnectedDevice.deviceName);
+//                        mHandler.removeCallbacks(mRtspTimeout);
+//                        disconnect();
+//                    }
+//                }
+//
+//                @Override
+//                public void onDisplayError(int error) {
+//                    if (mConnectedDevice == oldDevice) {
+//                        Log.i(TAG, "Lost RTSP connection with Wifi display due to error "
+//                                + error + ": " + mConnectedDevice.deviceName);
+//                        mHandler.removeCallbacks(mRtspTimeout);
+//                        handleConnectionFailure(false);
+//                    }
+//                }
+//            }, mHandler, mContext.getPackageName());
+//
+//            // Use extended timeout value for certification, as some tests require user inputs
+//            int rtspTimeout = RTSP_TIMEOUT_SECONDS;
+//
+//            mHandler.postDelayed(mRtspTimeout, rtspTimeout * 1000);
         }
     }
 

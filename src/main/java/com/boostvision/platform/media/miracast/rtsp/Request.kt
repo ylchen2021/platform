@@ -10,6 +10,7 @@ import kotlin.collections.HashMap
 class Request {
     var method: String? = null
     var uri: String? = null
+    var cseq = -1
     var headers = HashMap<String, HashMap<String, String>>()
 
     companion object {
@@ -30,6 +31,10 @@ class Request {
                 if (lines[i].length > 3) {
                     matcher = rexegHeader.matcher(lines[i])
                     matcher.find()
+                    if (matcher.group(1) == "CSeq") {
+                        requestOut.cseq = matcher.group(2).toInt()
+                        continue
+                    }
                     var headerContentStr = matcher.group(2)
                     var headerContent = hashMapOf<String, String>()
                     requestOut.headers[matcher.group(1).toLowerCase(Locale.US)] = headerContent

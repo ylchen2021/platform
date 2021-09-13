@@ -6,6 +6,7 @@ import android.util.Log
 import com.boostvision.platform.media.miracast.rtp.RtpSession
 import com.boostvision.platform.media.miracast.rtp.TransportMode
 import com.boostvision.platform.utils.DeviceUtils
+import com.boostvision.platform.utils.Logger
 import com.boostvision.platform.utils.TimeUtils
 import java.io.BufferedReader
 import java.io.IOException
@@ -19,6 +20,7 @@ import kotlin.collections.HashMap
 
 class RtspSession(private val mClient: Socket) {
     companion object {
+        private const val TAG = "RtspSession"
         private var playbackSessionTimeoutSecs = 30
         private var playbackSessionTimeoutUs = playbackSessionTimeoutSecs * 1000000L
     }
@@ -27,7 +29,7 @@ class RtspSession(private val mClient: Socket) {
     private var mInput: BufferedReader = BufferedReader(InputStreamReader(mClient.getInputStream()))
     private var responseHandlers: HashMap<Int, (Response)->ErrorCode> = hashMapOf()
     private var rtpSession: RtpSession? = null
-    private var cseq: Int = 0
+    private var mNextCSeq: Int = 1
     private var mChosenRTPPort: Int = -1
     private var audioSupport = false
     private var mUsingPCMAudio = false
@@ -36,9 +38,14 @@ class RtspSession(private val mClient: Socket) {
     private var rtcpPort = -1
     private var transportMode = TransportMode.TRANSPORT_UDP
     private var handlerThread = HandlerThread("rtsp_session")
-    private var handler = Handler(handlerThread.looper)
+    private var handler: Handler
 
     private val mListeners = arrayListOf<CallbackListener>()
+
+    init {
+        handlerThread.start()
+        handler = Handler(handlerThread.looper)
+    }
 
     interface CallbackListener {
         fun onError(errorCode: ErrorCode)
@@ -66,8 +73,7 @@ class RtspSession(private val mClient: Socket) {
         }
     }
 
-    fun start() {
-        handlerThread.start()
+    fun startNegotiation() {
         workingThread.start()
     }
 
@@ -79,6 +85,7 @@ class RtspSession(private val mClient: Socket) {
             while (!interrupted()) {
                 var lines = mInput.readLines()
                 try {
+                    Logger.d(TAG, "reading from socket=${lines}")
                     if (lines.isEmpty()) {
                         throw SocketException("Client disconnected")
                     }
@@ -86,7 +93,7 @@ class RtspSession(private val mClient: Socket) {
                         var response = Response()
                         err = Response.parse(lines, response)
                         if (err != ErrorCode.OK) {
-                            sendErrorResponse("400 Bad Request", cseq)
+                            sendErrorResponse("400 Bad Request", response.cseq)
                             return
                         }
                         err = processResponse(response)
@@ -94,7 +101,7 @@ class RtspSession(private val mClient: Socket) {
                         var request = Request()
                         err = Request.parse(lines, request)
                         if (err != ErrorCode.OK) {
-                            sendErrorResponse("400 Bad Request", cseq)
+                            sendErrorResponse("400 Bad Request", request.cseq)
                             return
                         }
                         err = processRequest(request)
@@ -129,7 +136,7 @@ class RtspSession(private val mClient: Socket) {
             "PLAY" ->
                 err = handlePlayRequest(request)
             else -> {
-                sendErrorResponse("405 Method Not Allowed", cseq)
+                sendErrorResponse("405 Method Not Allowed", request.cseq)
                 err = ErrorCode.ERROR_UNSUPPORTED
             }
         }
@@ -138,7 +145,7 @@ class RtspSession(private val mClient: Socket) {
 
     private fun handleOptionsRequest(request: Request): ErrorCode {
         var response = StringBuilder("RTSP/1.0 200 OK\r\n")
-        response.append(commonResponseParams(cseq))
+        response.append(commonResponseParams(request.cseq))
         response.append("Public: org.wfa.wfd1.0, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER\r\n\r\n")
         var err = outputSend(request.toString())
 
@@ -150,13 +157,13 @@ class RtspSession(private val mClient: Socket) {
 
     private fun handleSetupRequest(request: Request): ErrorCode {
         if (playbackSessionID != -1) {
-            sendErrorResponse( "400 Bad Request", cseq)
+            sendErrorResponse( "400 Bad Request", request.cseq)
             return ErrorCode.ERROR_MALFORMED
         }
 
         var transport = request.headers["transport"]
         if (transport == null) {
-            sendErrorResponse( "400 Bad Request", cseq)
+            sendErrorResponse( "400 Bad Request", request.cseq)
             return ErrorCode.ERROR_MALFORMED
         }
 
@@ -168,35 +175,35 @@ class RtspSession(private val mClient: Socket) {
             }
             if (transportMode != TransportMode.TRANSPORT_TCP_INTERLEAVED) {
                 if (!transport.containsKey("client_port") || !matchPort(false, transport["client_port"]?:"")) {
-                    sendErrorResponse("400 Bad Request", cseq)
+                    sendErrorResponse("400 Bad Request", request.cseq)
                     return ErrorCode.ERROR_MALFORMED
                 }
             }
         } else if ((transport.containsKey("RTP/AVP") || transport.containsKey("RTP/AVP/UDP")) && transport.containsKey("client_port")) {
             if (!matchPort(false, transport["client_port"]?:"")) {
-                sendErrorResponse("400 Bad Request", cseq)
+                sendErrorResponse("400 Bad Request", request.cseq)
                 return ErrorCode.ERROR_MALFORMED
             }
         } else if (transport.containsKey("RTP/AVP/UDP") && transport.containsKey("unicast") && !transport.containsKey("client_port")) {
             rtpPort = 19000
             rtcpPort = -1
         } else {
-            sendErrorResponse("461 Unsupported Transport", cseq)
+            sendErrorResponse("461 Unsupported Transport", request.cseq)
             return ErrorCode.ERROR_UNSUPPORTED
         }
 
         playbackSessionID = Random().nextInt()
         if (request.uri?.startsWith("rtsp://") == false) {
-            sendErrorResponse("400 Bad Request", cseq)
+            sendErrorResponse("400 Bad Request", request.cseq)
             return ErrorCode.ERROR_MALFORMED
         } else if (request.uri?.endsWith("/wfd1.0/streamid=0") == false) {
-            sendErrorResponse("404 Not found", cseq)
+            sendErrorResponse("404 Not found", request.cseq)
             return ErrorCode.ERROR_MALFORMED
         }
 
         rtpSession = RtpSession(mClient.remoteSocketAddress.toString(), rtpPort, rtcpPort, transportMode)
         var response = StringBuilder("RTSP/1.0 200 OK\r\n")
-        response.append(commonResponseParams(cseq))
+        response.append(commonResponseParams(request.cseq))
 
         if (transportMode == TransportMode.TRANSPORT_TCP_INTERLEAVED) {
             response.append("Transport: RTP/AVP/TCP;interleaved=${rtpPort}-${rtcpPort};\r\n")
@@ -244,12 +251,12 @@ class RtspSession(private val mClient: Socket) {
 
     private fun handlePlayRequest(request: Request): ErrorCode{
         if (!request.headers.containsKey("Session") && playbackSessionID == -1) {
-            sendErrorResponse("454 Session Not Found", cseq)
+            sendErrorResponse("454 Session Not Found", request.cseq)
             return ErrorCode.ERROR_MALFORMED
         }
 
         var response = StringBuilder("RTSP/1.0 200 OK\r\n")
-        response.append(commonResponseParams(cseq))
+        response.append(commonResponseParams(request.cseq))
         response.append("Range: npt=now-\r\n");
         response.append("\r\n")
         var err = outputSend(response.toString())
@@ -265,15 +272,17 @@ class RtspSession(private val mClient: Socket) {
 
     private fun sendM1Request(): ErrorCode {
         var response = StringBuilder("OPTIONS * RTSP/1.0\r\n")
-        response.append(commonResponseParams(cseq))
+        response.append(commonResponseParams(mNextCSeq))
         response.append("Require: org.wfa.wfd1.0\r\n")
         var err = outputSend(response.toString())
 
         if (err == ErrorCode.OK) {
-            responseHandlers[cseq] = {
+            responseHandlers[mNextCSeq] = {
                 handleM1Response(it)
             }
         }
+
+        mNextCSeq++
 
         return err
     }
@@ -286,17 +295,20 @@ class RtspSession(private val mClient: Socket) {
             """;
 
         var request = StringBuilder("GET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\r\n")
-        request.append(commonResponseParams(cseq))
+        request.append(commonResponseParams(mNextCSeq))
 
         request.append("Content-Type: text/parameters\r\n");
         request.append("Content-Length: ${body.length}}\r\n")
         request.append(body)
         var err = outputSend(request.toString())
         if (err == ErrorCode.OK) {
-            responseHandlers[cseq] = {
+            responseHandlers[mNextCSeq] = {
                 handleM3Response(it)
             }
         }
+
+        mNextCSeq++
+
         return err
     }
 
@@ -307,7 +319,7 @@ class RtspSession(private val mClient: Socket) {
             wfd_client_rtp_ports: RTP/AVP/UDP;unicast $mChosenRTPPort 0 mode=play\r\n"""
 
         var request = StringBuilder("SET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\r\n")
-        request.append(commonResponseParams(cseq))
+        request.append(commonResponseParams(mNextCSeq))
 
         request.append("Content-Type: text/parameters\r\n")
         request.append("Content-Length: ${body.length}\r\n")
@@ -316,10 +328,13 @@ class RtspSession(private val mClient: Socket) {
 
         var err = outputSend(request.toString())
         if (err == ErrorCode.OK) {
-            responseHandlers[cseq] = {
+            responseHandlers[mNextCSeq] = {
                 handleM4Response(it)
             }
         }
+
+        mNextCSeq++
+
         return err
     }
 
@@ -327,7 +342,7 @@ class RtspSession(private val mClient: Socket) {
         var body = "wfd_trigger_method: $triggerType\r\n"
 
         var request = StringBuilder("SET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\n")
-        request.append(commonResponseParams(cseq))
+        request.append(commonResponseParams(mNextCSeq))
 
         request.append("Content-Type: text/parameters\r\n")
         request.append("Content-Length: ${body.length}\r\n")
@@ -336,25 +351,30 @@ class RtspSession(private val mClient: Socket) {
 
         var err = outputSend(request.toString())
         if (err == ErrorCode.OK) {
-            responseHandlers[cseq] = {
+            responseHandlers[mNextCSeq] = {
                 handleM5Response(it)
             }
         }
+
+        mNextCSeq++
+
         return err
     }
 
     private fun sendM16Request() {
         var request = StringBuilder("GET_PARAMETER rtsp://localhost/wfd1.0 RTSP/1.0\r\n")
-        request.append(commonResponseParams(cseq))
+        request.append(commonResponseParams(mNextCSeq))
         request.append("Session: ${playbackSessionID}\r\n")
         request.append("\r\n")
         outputSend(request.toString())
+
+        mNextCSeq++
     }
 
     private fun outputSend(content: String): ErrorCode {
+        Logger.d(TAG, "writting to socket=${content}")
         try {
-            mOutput.write(content.toByteArray(charset("UTF-8")))
-            mOutput.flush()
+            mOutput.write(content.toByteArray())
         } catch (e: IOException) {
             e.printStackTrace()
             return ErrorCode.FAILED
@@ -368,7 +388,6 @@ class RtspSession(private val mClient: Socket) {
         commonResponse.append(TimeUtils.millis2String(System.currentTimeMillis(), "EEEE, dd MMM yyyy HH:mm:ss zzzz"))
         commonResponse.append("\r\n")
         commonResponse.append("Server: ${DeviceUtils.getName()}\r\n")
-        commonResponse.append("User-Agent: ${DeviceUtils.getName()}\r\n");
         if (cseq >= 0) {
             commonResponse.append("CSeq: ${cseq}\r\n")
         }
