@@ -8,10 +8,14 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 
 
-abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList:List<T>):
+abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dataList:List<T>):
     RecyclerView.Adapter<BaseViewHolder?>() {
 
     private var onItemClickListener: ((T)->Unit)? = null
+
+    private var itemComparator: ((T, T)->Boolean) = { a, b ->
+        false
+    }
 
     protected abstract fun onBindView(itemView: View, position: Int, data: T)
 
@@ -35,6 +39,9 @@ abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList
         onItemClickListener = listener
     }
 
+    fun setItemComparator(comparator: ((T, T)->Boolean)) {
+        itemComparator = comparator
+    }
 
     fun setDatas(newList: List<T>) {
         val diff = calculateDiff(newList)
@@ -57,7 +64,7 @@ abstract class BaseRcvAdapter<T>(private var layoutId: Int, private var dataList
             }
 
             override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
-                return false
+                return itemComparator.invoke(dataList[oldItemPosition], newDataList[newItemPosition])
             }
         })
     }
