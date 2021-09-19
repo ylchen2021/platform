@@ -11,7 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dataList:List<T>):
     RecyclerView.Adapter<BaseViewHolder?>() {
 
-    private var onItemClickListener: ((T)->Unit)? = null
+    private var onItemClickListener: ((View, T)->Unit)? = null
 
     private var itemComparator: ((T, T)->Boolean) = { a, b ->
         false
@@ -27,7 +27,7 @@ abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dat
     override fun onBindViewHolder(holder: BaseViewHolder, position: Int) {
         onBindView(holder.itemView, position, dataList[position])
         holder.itemView.setOnClickListener {
-            onItemClickListener?.invoke(dataList[position])
+            onItemClickListener?.invoke(holder.itemView, dataList[position])
         }
     }
 
@@ -35,7 +35,7 @@ abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dat
         return dataList.size
     }
 
-    fun setOnItemClickListener(listener: ((T)->Unit)) {
+    fun setOnItemClickListener(listener: ((View, T)->Unit)) {
         onItemClickListener = listener
     }
 
