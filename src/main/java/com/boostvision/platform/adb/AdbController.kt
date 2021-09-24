@@ -52,12 +52,10 @@ object AdbController {
                     val command = it.obj as String
                     if (adbStream?.isClosed == true) {
                         disconnect()
-                        notifyError("连接已断开，请重新连接")
-                        connected = false
-                        true
+                    } else {
+                        Logger.d(TAG, "(request)response=${command}")
+                        adbStream?.write(command.toByteArray())
                     }
-                    Logger.d(TAG, "(request)response=${command}")
-                    adbStream?.write(command.toByteArray())
                 }
                 MSG_DISCONNECT -> {
                     doDisconnect()
@@ -156,6 +154,7 @@ object AdbController {
 
                 } catch (e: Exception) {
                     e.printStackTrace()
+                    disconnect()
                     return@Runnable
                 }
             }
@@ -181,6 +180,7 @@ object AdbController {
             statusListeners.forEach {
                 it.onAdbDisconnected(deviceIp)
             }
+            notifyError("连接已断开，请重新连接")
         }
     }
 
