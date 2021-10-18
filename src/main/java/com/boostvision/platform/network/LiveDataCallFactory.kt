@@ -5,6 +5,8 @@ import androidx.lifecycle.MutableLiveData
 import retrofit2.*
 import java.lang.reflect.ParameterizedType
 import java.lang.reflect.Type
+import java.net.ConnectException
+import java.net.SocketTimeoutException
 
 
 class LiveDataCallFactory private constructor() : CallAdapter.Factory() {
@@ -57,20 +59,25 @@ class LiveDataCallFactory private constructor() : CallAdapter.Factory() {
             override fun onResponse(call: Call<T>, response: Response<T>) {
                 if (call.isCanceled) return
                 if (response.isSuccessful) {
-                    try {
-                        liveData.postValue(response.body())
-                    } catch (throwale: Throwable) {
-                        onFailure(call, throwale)
-                    }
+                    liveData.postValue(response.body())
                 } else {
-                    liveData.postValue(ResponseBean(null, null, 1) as T)
+                    liveData.postValue(ResponseBean(null, response.message(), ErrorType.UNKNOWN) as T)
                 }
             }
 
             @Suppress("UNCHECKED_CAST")
             override fun onFailure(call: Call<T>, t: Throwable) {
                 if (call.isCanceled) return
-                liveData.postValue(ResponseBean(null, null, 1) as T)
+                liveData.postValue(ResponseBean(null, null, getErrorType(t)) as T)
+            }
+        }
+
+        private fun getErrorType(t: Throwable): Int {
+            return when (t) {
+                is ConnectException -> ErrorType.ERROR_CONNECT
+                is SocketTimeoutException -> ErrorType.TIMEOUT
+                is HttpException -> ErrorType.ERROR_HTTP
+                else -> ErrorType.UNKNOWN
             }
         }
     }

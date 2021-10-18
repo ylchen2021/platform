@@ -25,13 +25,13 @@ object DaemonClient {
                     if (response.contains("pm list packages")) {
                         val isDaemonInstalled = parsePackageList(response)
                         if (!isDaemonInstalled) {
-                            installDaemonApk()
+                            pushDaemonApk()
                         } else {
-                            startDaemon()
+                            launchDaemon()
                         }
                     } else if (response.contains("pm install")) {
                         if (response.contains("Success")) {
-                            startDaemon()
+                            launchDaemon()
                         }
                     } else if (response.contains("am broadcast")) {
 
@@ -40,7 +40,7 @@ object DaemonClient {
                 AdbEventType.FILE_PUSHED -> {
                     var result = event.param as Boolean
                     if (result) {
-                        AdbController.sendCommand("pm install ${DAEMON_APK_LOCAL_PATH}${DAEMON_APK_NAME}\n")
+                        installDaemon()
                     }
                 }
             }
@@ -70,15 +70,17 @@ object DaemonClient {
         return isDaemonInstalled
     }
 
-    private fun installDaemonApk() {
+    fun installDaemon() {
+        AdbController.sendCommand("pm install ${DAEMON_APK_LOCAL_PATH}${DAEMON_APK_NAME}\n")
+    }
+
+    fun pushDaemonApk() {
         val assetsManager = context.resources.assets
         var inputStream = assetsManager.open(DAEMON_APK_NAME)
-//        var file = File("/data/local/tmp/daemon.apk")
-//        var fis = FileInputStream(file)
         AdbController.pushFile(inputStream, "${DAEMON_APK_LOCAL_PATH}${DAEMON_APK_NAME}")
     }
 
-    private fun startDaemon() {
+    fun launchDaemon() {
         AdbController.sendCommand("am broadcast -n $DAEMON_STARTER\n")
     }
 }
