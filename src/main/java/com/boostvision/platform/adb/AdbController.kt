@@ -47,7 +47,7 @@ object AdbController {
                 }
                 MSG_COMMAND -> {
                     if (!connected) {
-                        notifyError("设备未连接，请先连接设备")
+                        notifyEvent(AdbEventType.ERROR, "设备未连接，请先连接设备")
                     }
 
                     val command = it.obj as String
@@ -64,9 +64,7 @@ object AdbController {
                 MSG_PUSH -> {
                     var param = it.obj as PushParam
                     var result = doPush(param.inputStream, param.remotePath)
-                    eventListeners.forEach { listener ->
-                        listener.onAdbEvent(AdbEvent(AdbEventType.FILE_PUSHED, result))
-                    }
+                    notifyEvent(AdbEventType.FILE_PUSHED, result)
                 }
             }
             true
@@ -101,13 +99,11 @@ object AdbController {
 
     private fun doConnect(deviceIp: String, devicePort: Int): Boolean {
         var errorMsg: String? = null
-        eventListeners.forEach {
-            it.onAdbEvent(AdbEvent(AdbEventType.CONNECTING, deviceIp))
-        }
+        notifyEvent(AdbEventType.CONNECTING, deviceIp)
         if (adbCrypto == null) {
             errorMsg = "adbCrypto is null, please call init() first";
             Log.e(TAG, errorMsg)
-            notifyError(errorMsg)
+            notifyEvent(AdbEventType.ERROR, errorMsg)
             return false
         }
 
@@ -129,7 +125,7 @@ object AdbController {
             e.printStackTrace()
             errorMsg = "connect error!"
             Log.i(TAG, errorMsg, e)
-            notifyError(errorMsg)
+            notifyEvent(AdbEventType.ERROR, errorMsg)
             disconnect()
             return false
         }
@@ -137,9 +133,7 @@ object AdbController {
         this.deviceIp = deviceIp
         this.devicePort = devicePort
         connected = true
-        eventListeners.forEach {
-            it.onAdbEvent(AdbEvent(AdbEventType.CONNECTED, deviceIp))
-        }
+        notifyEvent(AdbEventType.CONNECTED, deviceIp)
 
         // Start the receiving thread
         readThread = Thread(Runnable {
@@ -154,9 +148,7 @@ object AdbController {
                         responseBuilder.append(response)
                         var fullResponse = responseBuilder.toString()
                         Logger.d(TAG, "response=${fullResponse}")
-                        eventListeners.forEach {
-                            it.onAdbEvent(AdbEvent(AdbEventType.RESPONSE, fullResponse))
-                        }
+                        notifyEvent(AdbEventType.RESPONSE, fullResponse)
                         responseBuilder = StringBuilder()
                     }
 
@@ -179,19 +171,21 @@ object AdbController {
     }
 
     fun doDisconnect() {
-        if (connected) {
+        if (adbShellStream != null) {
             adbShellStream?.close()
             adbShellStream = null
+        }
+        if (adbSyncStream != null) {
             adbSyncStream?.close()
             adbSyncStream = null
+        }
+        if (adbConnection != null) {
             adbConnection?.close()
             adbConnection = null
-            connected = false
-            eventListeners.forEach {
-                it.onAdbEvent(AdbEvent(AdbEventType.DISCONNECTED, deviceIp))
-            }
-            notifyError("连接已断开，请重新连接")
         }
+        connected = false
+        notifyEvent(AdbEventType.DISCONNECTED, deviceIp)
+        notifyEvent(AdbEventType.ERROR, "连接已断开，请重新连接")
     }
 
     fun sendCommand(command: String) {
@@ -291,9 +285,9 @@ object AdbController {
         return c
     }
 
-    private fun notifyError(errorMsg: String) {
+    private fun notifyEvent(type: AdbEventType, param: Any) {
         eventListeners.forEach {
-            it.onAdbEvent(AdbEvent(AdbEventType.ERROR, errorMsg))
+            it.onAdbEvent(AdbEvent(type, param))
         }
     }
 
