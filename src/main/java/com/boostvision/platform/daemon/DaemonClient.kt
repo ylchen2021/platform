@@ -5,6 +5,7 @@ import android.content.Context
 import com.boostvision.platform.adb.AdbController
 import com.boostvision.platform.adb.AdbEvent
 import com.boostvision.platform.adb.AdbEventType
+import com.boostvision.platform.adb.AdbStatus
 import java.io.File
 import java.io.FileInputStream
 
@@ -17,8 +18,10 @@ object DaemonClient {
     private var adbEventListener = object: AdbController.AdbEventListener {
         override fun onAdbEvent(event: AdbEvent) {
             when (event.eventType) {
-                AdbEventType.CONNECTED -> {
-                    AdbController.sendCommand("pm list packages\n")
+                AdbEventType.STATUS -> {
+                    if (event.status == AdbStatus.CONNECTED) {
+                        AdbController.sendCommand("pm list packages\n")
+                    }
                 }
                 AdbEventType.RESPONSE -> {
                     var response = event.param as String
