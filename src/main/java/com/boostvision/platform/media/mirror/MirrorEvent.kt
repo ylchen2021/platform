@@ -7,11 +7,13 @@ data class MirrorEvent(
 )
 
 enum class MirrorEventType {
-    STATUS
+    STATUS,
+    ERROR
 }
 
 enum class MirrorStatus {
     DISCONNECTED,
+    UPLOADING,
     CONNECTING,
     MIRRORING,
 }

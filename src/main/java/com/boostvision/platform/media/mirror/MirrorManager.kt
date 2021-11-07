@@ -8,7 +8,6 @@ import android.content.Intent
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.util.Log
-import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
@@ -16,13 +15,13 @@ import com.boostvision.platform.media.mirror.RtspServer.MESSAGE_STREAMING_STARTE
 import com.boostvision.platform.media.mirror.RtspServer.MESSAGE_STREAMING_STOPPED
 import com.boostvision.platform.media.mirror.stream.audio.AudioQuality
 import com.boostvision.platform.media.mirror.stream.video.VideoQuality
+import com.boostvision.platform.media.mirror.uploader.ReceiverUploader
 import com.tbruyelle.rxpermissions2.RxPermissions
 import java.lang.Exception
 
 object MirrorManager {
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private var mediaProjection: MediaProjection? = null
-    private var session: Session? = null
     private var streamWidth = 0
     private var streamHeight = 0
     private var bitrate = 100000
@@ -31,13 +30,26 @@ object MirrorManager {
     private var status = MirrorStatus.DISCONNECTED
     private var eventListeners: MutableList<MirrorEventListener> = arrayListOf()
     private var activityResultLauncher: ActivityResultLauncher<Intent>? = null
+    private var tmpContext: Fragment? = null
+    private var targetIp = ""
 
     private var appContext: Context? = null
     private var rtspServer: RtspServer? = null
+    private var uploadCallback = object: ReceiverUploader.UploadResultCallback{
+        override fun onUploadSuccess() {
+            doStartMirror()
+        }
+
+        override fun onUploadFailure(errorMsg: String) {
+            status = MirrorStatus.DISCONNECTED
+            notifyEvent(MirrorEventType.STATUS, MirrorStatus.DISCONNECTED, null)
+            notifyEvent(MirrorEventType.ERROR, null, errorMsg)
+        }
+    }
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
-            stopMirror()
+            stop()
         }
     }
 
@@ -57,9 +69,14 @@ object MirrorManager {
 
     fun init(appContext: Context) {
         this.appContext = appContext
+        ReceiverUploader.init(appContext)
+        ReceiverUploader.addResultCallback(uploadCallback)
     }
 
-    fun release() {}
+    fun release() {
+        ReceiverUploader.removeResultCallback(uploadCallback)
+        ReceiverUploader.release()
+    }
 
     fun prepareForMirror(fragment: Fragment) {
         activityResultLauncher = fragment.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -80,12 +97,12 @@ object MirrorManager {
         rtspServer = RtspServer()
         rtspServer?.addCallbackListener(object : RtspServer.CallbackListener {
             override fun onError(server: RtspServer?, e: Exception?, error: Int) {
-                stopMirror()
+                stop()
             }
 
             override fun onMessage(server: RtspServer?, message: Int) {
                 if (message == MESSAGE_STREAMING_STOPPED) {
-                    stopMirror()
+                    stop()
                 } else if (message == MESSAGE_STREAMING_STARTED) {
                     status = MirrorStatus.MIRRORING
                     notifyEvent(MirrorEventType.STATUS, MirrorStatus.MIRRORING, null)
@@ -94,13 +111,17 @@ object MirrorManager {
         })
     }
 
-    fun startMirror(fragment: Fragment, width: Int, height: Int, bitrate: Int, framerate: Int, enableAudio: Boolean) {
+    fun start(fragment: Fragment, targetIp: String, width: Int, height: Int, bitrate: Int, framerate: Int, enableAudio: Boolean) {
         streamWidth = width
         streamHeight = height
         this.bitrate = MirrorManager.bitrate
         this.framerate = MirrorManager.framerate
         this.enableAudio = true
-        checkAudioPermissions(fragment)
+        tmpContext = fragment
+        this.targetIp = targetIp
+        status = MirrorStatus.UPLOADING
+        notifyEvent(MirrorEventType.STATUS, MirrorStatus.UPLOADING, null)
+        ReceiverUploader.checkUpload(targetIp)
     }
 
     @SuppressLint("CheckResult")
@@ -117,7 +138,7 @@ object MirrorManager {
             }
     }
 
-    fun stopMirror() {
+    fun stop() {
         stopRtspServer()
         mediaProjection?.stop()
         status = MirrorStatus.DISCONNECTED
@@ -126,6 +147,12 @@ object MirrorManager {
 
     fun isMirroring(): Boolean {
         return status != MirrorStatus.DISCONNECTED
+    }
+
+    private fun doStartMirror() {
+        if (tmpContext != null) {
+            checkAudioPermissions(tmpContext!!)
+        }
     }
 
     private fun initSessionBuilder() {
