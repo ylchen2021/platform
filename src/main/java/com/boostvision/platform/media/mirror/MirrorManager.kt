@@ -7,6 +7,7 @@ import android.content.Context.MEDIA_PROJECTION_SERVICE
 import android.content.Intent
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -32,6 +33,7 @@ object MirrorManager {
     private var activityResultLauncher: ActivityResultLauncher<Intent>? = null
     private var tmpContext: Fragment? = null
     private var targetIp = ""
+    private var mediaProjectionCreateByService = false
 
     private var appContext: Context? = null
     private var rtspServer: RtspServer? = null
@@ -71,6 +73,7 @@ object MirrorManager {
         this.appContext = appContext
         ReceiverUploader.init(appContext)
         ReceiverUploader.addResultCallback(uploadCallback)
+        mediaProjectionCreateByService = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
     }
 
     fun release() {
@@ -78,21 +81,45 @@ object MirrorManager {
         ReceiverUploader.release()
     }
 
+    fun onMediaProjectionCreated(mediaProjection: MediaProjection?) {
+        this.mediaProjection = mediaProjection
+        status = MirrorStatus.CONNECTING
+        notifyEvent(MirrorEventType.STATUS, MirrorStatus.CONNECTING, null)
+        MirrorManager.mediaProjection?.registerCallback(projectionCallback, null)
+        initSessionBuilder()
+        startRtspServer()
+    }
+
+    @SuppressLint("NewApi")
+    private fun startForegroundService(resultCode: Int, data: Intent) {
+        var intent = Intent(tmpContext?.context, MirrorService::class.java)
+        intent.putExtra("smallicon", 0)
+        intent.putExtra("largeicon", 0)
+        intent.putExtra("code", resultCode)
+        intent.putExtra("data", data)
+        tmpContext?.activity?.startForegroundService(intent)
+    }
+
+    private fun stopForegroundService() {
+        var intent = Intent(tmpContext?.context, MirrorService::class.java)
+        tmpContext?.activity?.stopService(intent)
+    }
+
     fun prepareForMirror(fragment: Fragment) {
         activityResultLauncher = fragment.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
             if (it.data == null) {
                 return@registerForActivityResult
             }
-            mediaProjection = mediaProjectionManager.getMediaProjection(it.resultCode, it.data!!)
-            if (mediaProjection == null) {
-                Log.e("@@", "media projection is null")
-                return@registerForActivityResult
+            if (mediaProjectionCreateByService) {
+                startForegroundService(it.resultCode, it.data!!)
+            } else {
+                mediaProjection = mediaProjectionManager.getMediaProjection(it.resultCode, it.data!!)
+                if (mediaProjection == null) {
+                    Log.e("@@", "media projection is null")
+                    return@registerForActivityResult
+                }
+                onMediaProjectionCreated(mediaProjection)
             }
-            status = MirrorStatus.CONNECTING
-            notifyEvent(MirrorEventType.STATUS, MirrorStatus.CONNECTING, null)
-            mediaProjection?.registerCallback(projectionCallback, null)
-            initSessionBuilder()
-            startRtspServer()
         }
         rtspServer = RtspServer()
         rtspServer?.addCallbackListener(object : RtspServer.CallbackListener {
@@ -139,6 +166,9 @@ object MirrorManager {
     }
 
     fun stop() {
+        if (mediaProjectionCreateByService) {
+            stopForegroundService()
+        }
         stopRtspServer()
         mediaProjection?.stop()
         status = MirrorStatus.DISCONNECTED
