@@ -28,7 +28,6 @@ object ReceiverUploader {
     private var targetIp = ""
     private var appContext: Context? = null
     private var uploadSuccess = false
-    private var hasRetried = false
 
     fun addResultCallback(callback: UploadResultCallback) {
         if (!callbacks.contains(callback)) {
@@ -51,7 +50,6 @@ object ReceiverUploader {
         appContext = context
         uploadReceiverLiveData = Transformations.switchMap(uploadReceiverTrigger) {
             uploadSuccess = false
-            hasRetried = false
             uploadReceiverApk(it)
         }
         uploadReceiverLiveData.observeForever { response ->
@@ -72,21 +70,16 @@ object ReceiverUploader {
                     }
                 }
             } else {
-                if (!uploadSuccess && !hasRetried && (response.status == ErrorType.ERROR_CONNECT || response.status == ErrorType.TIMEOUT)) {
-                    hasRetried = true
-                    DaemonClient.launchDaemon()
-                    uploadReceiverTrigger.postValue(targetIp)
-                } else {
-                    callbacks.forEach {
-                        it.onUploadFailure(response.errorMessage?:"")
-                    }
+                callbacks.forEach {
+                    it.onUploadFailure(response.errorMessage?:"")
                 }
             }
         }
         uploadCheckLiveData = Transformations.switchMap(uploadCheckTrigger) {
+            DaemonClient.launchDaemon()
             val headers = hashMapOf<String, String>()
             headers["package"] = "com.astrill.astrillvpn"
-            HttpClient.create("http://${targetIp}:${HttpClient.DEFAULT_PORT}/", UploadInterface::class.java)
+            HttpClient.create("http://${targetIp}:${DaemonClient.DEFAULT_PORT}/", UploadInterface::class.java)
                 .uploadCheck(headers)
         }
         uploadCheckLiveData.observeForever { response ->
@@ -103,14 +96,8 @@ object ReceiverUploader {
                     }
                 }
             } else {
-                if (!uploadSuccess && !hasRetried && (response.status == ErrorType.ERROR_CONNECT || response.status == ErrorType.TIMEOUT)) {
-                    hasRetried = true
-                    DaemonClient.launchDaemon()
-                    uploadCheckTrigger.postValue(targetIp)
-                } else {
-                    callbacks.forEach {
-                        it.onUploadFailure(response.errorMessage ?: "")
-                    }
+                callbacks.forEach {
+                    it.onUploadFailure(response.errorMessage ?: "")
                 }
             }
         }
@@ -149,7 +136,7 @@ object ReceiverUploader {
         val part = MultipartBody.Part.createFormData("uploaded_file", RECEIVER_APK_NAME, body)
         val headers = hashMapOf<String, String>()
         headers["package"] = "com.astrill.astrillvpn"
-        return HttpClient.create("http://${targetIp}:${HttpClient.DEFAULT_PORT}/", UploadInterface::class.java)
+        return HttpClient.create("http://${targetIp}:${DaemonClient.DEFAULT_PORT}/", UploadInterface::class.java)
             .uploadReceiver(headers, part)
     }
 

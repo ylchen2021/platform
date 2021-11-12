@@ -42,7 +42,7 @@ object UIUtils {
         if (sScreenWidth == 0) {
             val displayMetrics = DisplayMetrics()
             val wm = getWindowManager(context)
-            wm!!.defaultDisplay.getMetrics(displayMetrics)
+            wm!!.defaultDisplay.getRealMetrics(displayMetrics)
             sScreenWidth = displayMetrics.widthPixels
         }
         return sScreenWidth
@@ -59,7 +59,7 @@ object UIUtils {
         if (sScreenHeight == 0) {
             val displayMetrics = DisplayMetrics()
             val wm = getWindowManager(context)
-            wm!!.defaultDisplay.getMetrics(displayMetrics)
+            wm!!.defaultDisplay.getRealMetrics(displayMetrics)
             sScreenHeight = displayMetrics.heightPixels
         }
         return sScreenHeight

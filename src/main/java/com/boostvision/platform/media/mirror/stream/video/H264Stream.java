@@ -99,7 +99,6 @@ public class H264Stream extends VideoStream {
 		} catch (Exception e) {
 			// Fallback on the old streaming method using the MediaRecorder API
 			Log.e(TAG,"Resolution not supported with the MediaCodec API, we fallback on the old streamign method.");
-			mMode = MODE_MEDIARECORDER_API;
 			return testH264();
 		}
 	}

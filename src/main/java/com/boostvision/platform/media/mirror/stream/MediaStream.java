@@ -44,15 +44,9 @@ import java.util.Random;
 public abstract class MediaStream implements Stream {
 
 	protected static final String TAG = "MediaStream";
-	
-	/** Raw audio/video will be encoded using the MediaRecorder API. */
-	public static final byte MODE_MEDIARECORDER_API = 0x01;
 
 	/** Raw audio/video will be encoded using the MediaCodec API with buffers. */
 	public static final byte MODE_MEDIACODEC_API = 0x02;
-
-	/** Raw audio/video will be encoded using the MediaCode API with a surface. */
-	public static final byte MODE_MEDIACODEC_API_2 = 0x05;
 
 	/** A LocalSocket will be used to feed the MediaRecorder object */
 	public static final byte PIPE_API_LS = 0x01;
@@ -66,7 +60,6 @@ public abstract class MediaStream implements Stream {
 	/** The packetizer that will read the output of the camera and send RTP packets over the networked. */
 	protected AbstractPacketizer mPacketizer = null;
 
-	protected static byte sSuggestedMode = MODE_MEDIARECORDER_API;
 	protected byte mMode, mRequestedMode;
 
 	/** 
@@ -96,29 +89,12 @@ public abstract class MediaStream implements Stream {
 	protected MediaCodec mMediaCodec;
 	
 	static {
-		// We determine whether or not the MediaCodec API should be used
-		try {
-			Class.forName("android.media.MediaCodec");
-			// Will be set to MODE_MEDIACODEC_API at some point...
-			sSuggestedMode = MODE_MEDIACODEC_API;
-			Log.i(TAG,"Phone supports the MediaCoded API");
-		} catch (ClassNotFoundException e) {
-			sSuggestedMode = MODE_MEDIARECORDER_API;
-			Log.i(TAG,"Phone does not support the MediaCodec API");
-		}
-		
 		// Starting lollipop, the LocalSocket API cannot be used anymore to feed 
 		// a MediaRecorder object for security reasons
-		if (Build.VERSION.SDK_INT > Build.VERSION_CODES.KITKAT_WATCH) {
-			sPipeApi = PIPE_API_PFD;
-		} else {
-			sPipeApi = PIPE_API_LS;
-		}
+		sPipeApi = PIPE_API_PFD;
 	}
 
 	public MediaStream() {
-		mRequestedMode = sSuggestedMode;
-		mMode = sSuggestedMode;
 	}
 
 	/** 
@@ -257,18 +233,11 @@ public abstract class MediaStream implements Stream {
 	public synchronized  void stop() {
 		if (mStreaming) {
 			try {
-				if (mMode==MODE_MEDIARECORDER_API) {
-					mMediaRecorder.stop();
-					mMediaRecorder.release();
-					mMediaRecorder = null;
-					closeSockets();
-					mPacketizer.stop();
-				} else {
-					mPacketizer.stop();
-					mMediaCodec.stop();
-					mMediaCodec.release();
-					mMediaCodec = null;
-				}
+				mPacketizer.stop();
+				mMediaCodec.stop();
+				Thread.sleep(100);
+				mMediaCodec.release();
+				mMediaCodec = null;
 			} catch (Exception e) {
 				e.printStackTrace();
 			}	

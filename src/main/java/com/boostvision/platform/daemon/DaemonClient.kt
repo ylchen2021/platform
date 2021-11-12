@@ -1,19 +1,18 @@
 package com.boostvision.platform.daemon
 
 import android.app.Application
-import android.content.Context
 import com.boostvision.platform.adb.AdbController
 import com.boostvision.platform.adb.AdbEvent
 import com.boostvision.platform.adb.AdbEventType
 import com.boostvision.platform.adb.AdbStatus
-import java.io.File
-import java.io.FileInputStream
 
 object DaemonClient {
     private const val DAEMON_PACKAGE = "com.boostvision.daemon"
     private const val DAEMON_STARTER = "$DAEMON_PACKAGE/.DaemonStarter"
     private const val DAEMON_APK_LOCAL_PATH = "/data/local/tmp/"
     private const val DAEMON_APK_NAME = "daemon.apk"
+    const val DEFAULT_PORT = 8088
+
     private lateinit var context: Application
     private var adbEventListener = object: AdbController.AdbEventListener {
         override fun onAdbEvent(event: AdbEvent) {

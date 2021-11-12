@@ -139,11 +139,7 @@ public class AACStream extends AudioStream {
 
 		if (mMode != mRequestedMode || mPacketizer==null) {
 			mMode = mRequestedMode;
-			if (mMode == MODE_MEDIARECORDER_API) {
-				mPacketizer = new AACADTSPacketizer();
-			} else { 
-				mPacketizer = new AACLATMPacketizer();
-			}
+			mPacketizer = new AACLATMPacketizer();
 			mPacketizer.setDestination(mDestination, mRtpPort, mRtcpPort);
 			mPacketizer.getRtpSocket().setOutputStream(mOutputStream, mChannelIdentifier);
 		}

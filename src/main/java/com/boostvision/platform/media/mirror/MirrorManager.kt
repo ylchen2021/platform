@@ -12,17 +12,29 @@ import android.util.Log
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
-import com.boostvision.platform.media.mirror.RtspServer.MESSAGE_STREAMING_STARTED
-import com.boostvision.platform.media.mirror.RtspServer.MESSAGE_STREAMING_STOPPED
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Transformations
+import com.boostvision.platform.daemon.DaemonClient
+import com.boostvision.platform.media.mirror.RtspServer.*
 import com.boostvision.platform.media.mirror.stream.audio.AudioQuality
 import com.boostvision.platform.media.mirror.stream.video.VideoQuality
 import com.boostvision.platform.media.mirror.uploader.ReceiverUploader
+import com.boostvision.platform.media.mirror.uploader.UploadResponseBean
+import com.boostvision.platform.network.ErrorType
+import com.boostvision.platform.network.HttpClient
+import com.boostvision.platform.network.ResponseBean
+import com.boostvision.platform.utils.DeviceUtils
 import com.tbruyelle.rxpermissions2.RxPermissions
+import okhttp3.MultipartBody
+import retrofit2.http.*
 import java.lang.Exception
 
 object MirrorManager {
     private lateinit var mediaProjectionManager: MediaProjectionManager
     private var mediaProjection: MediaProjection? = null
+    private lateinit var mirrorRequestResult: LiveData<ResponseBean<Any>>
+    private val mirrorRequestTrigger = MutableLiveData<String>()
     private var streamWidth = 0
     private var streamHeight = 0
     private var bitrate = 100000
@@ -35,19 +47,19 @@ object MirrorManager {
     private var targetIp = ""
     private var mediaProjectionCreateByService = false
 
-    private var appContext: Context? = null
+    private lateinit var appContext: Context
     private var rtspServer: RtspServer? = null
-    private var uploadCallback = object: ReceiverUploader.UploadResultCallback{
-        override fun onUploadSuccess() {
-            doStartMirror()
-        }
-
-        override fun onUploadFailure(errorMsg: String) {
-            status = MirrorStatus.DISCONNECTED
-            notifyEvent(MirrorEventType.STATUS, MirrorStatus.DISCONNECTED, null)
-            notifyEvent(MirrorEventType.ERROR, null, errorMsg)
-        }
-    }
+//    private var uploadCallback = object: ReceiverUploader.UploadResultCallback{
+//        override fun onUploadSuccess() {
+//            doStartMirror()
+//        }
+//
+//        override fun onUploadFailure(errorMsg: String) {
+//            status = MirrorStatus.DISCONNECTED
+//            notifyEvent(MirrorEventType.STATUS, MirrorStatus.DISCONNECTED, null)
+//            notifyEvent(MirrorEventType.ERROR, null, errorMsg)
+//        }
+//    }
 
     private val projectionCallback = object : MediaProjection.Callback() {
         override fun onStop() {
@@ -71,14 +83,29 @@ object MirrorManager {
 
     fun init(appContext: Context) {
         this.appContext = appContext
-        ReceiverUploader.init(appContext)
-        ReceiverUploader.addResultCallback(uploadCallback)
+        //ReceiverUploader.init(appContext)
+        //ReceiverUploader.addResultCallback(uploadCallback)
         mediaProjectionCreateByService = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+        mirrorRequestResult = Transformations.switchMap(mirrorRequestTrigger) {
+            DaemonClient.launchDaemon()
+            Thread.sleep(500)
+            val body = hashMapOf<String, String>()
+            body["action"] = "play"
+            body["url"] = it
+            HttpClient.create("http://${targetIp}:${DaemonClient.DEFAULT_PORT}/", MirrorRequestInterface::class.java)
+                .mirror(body)
+        }
+        mirrorRequestResult.observeForever { response ->
+            if (!response.isSuccess()) {
+                stop()
+                notifyEvent(MirrorEventType.ERROR, null, "mirror request error, msg=${response.errorMessage}")
+            }
+        }
     }
 
     fun release() {
-        ReceiverUploader.removeResultCallback(uploadCallback)
-        ReceiverUploader.release()
+        //ReceiverUploader.removeResultCallback(uploadCallback)
+        //ReceiverUploader.release()
     }
 
     fun onMediaProjectionCreated(mediaProjection: MediaProjection?) {
@@ -88,6 +115,11 @@ object MirrorManager {
         MirrorManager.mediaProjection?.registerCallback(projectionCallback, null)
         initSessionBuilder()
         startRtspServer()
+        mirrorRequestTrigger.postValue(getRtspPlayUrl())
+    }
+
+    private fun getRtspPlayUrl(): String {
+        return "rtsp://${DeviceUtils.getIpAddress(appContext)}:$DEFAULT_RTSP_PORT"
     }
 
     @SuppressLint("NewApi")
@@ -141,14 +173,12 @@ object MirrorManager {
     fun start(fragment: Fragment, targetIp: String, width: Int, height: Int, bitrate: Int, framerate: Int, enableAudio: Boolean) {
         streamWidth = width
         streamHeight = height
-        this.bitrate = MirrorManager.bitrate
-        this.framerate = MirrorManager.framerate
-        this.enableAudio = true
+        this.bitrate = bitrate
+        this.framerate = framerate
+        this.enableAudio = enableAudio
         tmpContext = fragment
         this.targetIp = targetIp
-        status = MirrorStatus.UPLOADING
-        notifyEvent(MirrorEventType.STATUS, MirrorStatus.UPLOADING, null)
-        ReceiverUploader.checkUpload(targetIp)
+        doStartMirror()
     }
 
     @SuppressLint("CheckResult")
@@ -225,5 +255,10 @@ object MirrorManager {
 
     interface MirrorEventListener {
         fun onMirrorEvent(event: MirrorEvent)
+    }
+
+    interface MirrorRequestInterface {
+        @POST("mirror")
+        fun mirror(@Body bodyMap: Map<String, String>): LiveData<ResponseBean<Any>>
     }
 }

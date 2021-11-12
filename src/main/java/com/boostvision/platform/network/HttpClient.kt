@@ -10,8 +10,6 @@ import java.util.concurrent.TimeUnit
 
 class HttpClient {
     companion object {
-        const val DEFAULT_PORT = 8088
-
         fun <T> create(serviceUrl: String, clz: Class<T>): T {
             return Retrofit.Builder()
                 .baseUrl(serviceUrl)
