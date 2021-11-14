@@ -13,7 +13,6 @@ import android.media.projection.MediaProjectionManager
 
 
 class MirrorService : Service() {
-    private var mediaProjection: MediaProjection? = null
     private var mediaProjectionManager: MediaProjectionManager? = null
 
     override fun onBind(intent: Intent): IBinder? {
@@ -32,11 +31,17 @@ class MirrorService : Service() {
         createNotificationChannel(smallRes, largeRes, null)
         val resultCode = intent.getIntExtra("code", 0)
         val data = intent.getParcelableExtra("data") as Intent?
-        mediaProjection = mediaProjectionManager?.getMediaProjection(resultCode, data!!)
+        val mediaProjection = mediaProjectionManager?.getMediaProjection(resultCode, data!!)
         if (mediaProjection == null) {
             return super.onStartCommand(intent, flags, startId)
         }
-        MirrorManager.onMediaProjectionCreated(mediaProjection)
+        val ip = intent.getStringExtra("ip")?:""
+        val width = intent.getIntExtra("width", 0)
+        val height = intent.getIntExtra("height", 0)
+        val bitrate = intent.getIntExtra("bitrate", 0)
+        val framerate = intent.getIntExtra("framerate", 0)
+        val enableAudio = intent.getBooleanExtra("enableAudio", true)
+        MirrorManager.start(mediaProjection, ip, width, height, bitrate, framerate, enableAudio)
         return super.onStartCommand(intent, flags, startId)
     }
 

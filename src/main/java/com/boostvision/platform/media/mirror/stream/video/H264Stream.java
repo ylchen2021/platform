@@ -80,26 +80,12 @@ public class H264Stream extends VideoStream {
 		super.configure();
 		mMode = mRequestedMode;
 		mQuality = mRequestedQuality.clone();
-		mConfig = testH264();
+		mConfig = testMediaCodecAPI();
 	}
 	
-	/** 
-	 * Tests if streaming with the given configuration (bit rate, frame rate, resolution) is possible 
-	 * and determines the pps and sps. Should not be called by the UI thread.
-	 **/
-	private MP4Config testH264() throws IllegalStateException, IOException {
-		return testMediaCodecAPI();
-	}
-
 	@SuppressLint("NewApi")
 	private MP4Config testMediaCodecAPI() throws RuntimeException, IOException {
-		try {
-			EncoderDebugger debugger = EncoderDebugger.debug(mSettings, mQuality.resX, mQuality.resY);
-			return new MP4Config(debugger.getB64SPS(), debugger.getB64PPS());
-		} catch (Exception e) {
-			// Fallback on the old streaming method using the MediaRecorder API
-			Log.e(TAG,"Resolution not supported with the MediaCodec API, we fallback on the old streamign method.");
-			return testH264();
-		}
+		EncoderDebugger debugger = EncoderDebugger.debug(mSettings, mQuality.resX, mQuality.resY);
+		return new MP4Config(debugger.getB64SPS(), debugger.getB64PPS());
 	}
 }
