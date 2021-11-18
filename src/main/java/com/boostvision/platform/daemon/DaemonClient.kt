@@ -1,18 +1,28 @@
 package com.boostvision.platform.daemon
 
 import android.app.Application
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.MutableLiveData
+import androidx.lifecycle.Transformations
 import com.boostvision.platform.adb.AdbController
 import com.boostvision.platform.adb.AdbEvent
 import com.boostvision.platform.adb.AdbEventType
 import com.boostvision.platform.adb.AdbStatus
+import com.boostvision.platform.network.HttpClient
+import com.boostvision.platform.network.ResponseBean
+import retrofit2.http.GET
 
 object DaemonClient {
     private const val DAEMON_PACKAGE = "com.boostvision.daemon"
     private const val DAEMON_STARTER = "$DAEMON_PACKAGE/.DaemonStarter"
     private const val DAEMON_APK_LOCAL_PATH = "/data/local/tmp/"
     private const val DAEMON_APK_NAME = "daemon.apk"
+    private const val DAEMON_VERSION = 3
     const val DEFAULT_PORT = 8088
 
+    private lateinit var deviceInfoResult: LiveData<ResponseBean<DeviceInfo>>
+    private val deviceInfoTrigger = MutableLiveData<String>()
+    private var connectedIp = ""
     private lateinit var context: Application
     private var adbEventListener = object: AdbController.AdbEventListener {
         override fun onAdbEvent(event: AdbEvent) {
@@ -20,6 +30,9 @@ object DaemonClient {
                 AdbEventType.STATUS -> {
                     if (event.status == AdbStatus.CONNECTED) {
                         AdbController.sendCommand("pm list packages\n")
+                        connectedIp = event.param as String
+                    } else if (event.status == AdbStatus.DISCONNECTED) {
+                        connectedIp = ""
                     }
                 }
                 AdbEventType.RESPONSE -> {
@@ -30,13 +43,15 @@ object DaemonClient {
                             pushDaemonApk()
                         } else {
                             launchDaemon()
+                            //check if need update daemon
+                            if (connectedIp.isNotEmpty()) {
+                                deviceInfoTrigger.postValue(connectedIp)
+                            }
                         }
                     } else if (response.contains("pm install")) {
                         if (response.contains("Success")) {
                             launchDaemon()
                         }
-                    } else if (response.contains("am broadcast")) {
-
                     }
                 }
                 AdbEventType.FILE_PUSHED -> {
@@ -52,6 +67,19 @@ object DaemonClient {
     fun init(context: Application) {
         this.context = context
         AdbController.addEventListener(adbEventListener)
+
+        deviceInfoResult = Transformations.switchMap(deviceInfoTrigger) {
+            HttpClient.create("http://${it}:${DEFAULT_PORT}/", DeviceRequestInterface::class.java)
+                .getDeviceInfo()
+        }
+        deviceInfoResult.observeForever { response ->
+            if (response.isSuccess()) {
+                val version = response.data?.daemonVersion?:0
+                if (DAEMON_VERSION > version) {
+                    pushDaemonApk()
+                }
+            }
+        }
     }
 
     fun release() {
@@ -72,11 +100,11 @@ object DaemonClient {
         return isDaemonInstalled
     }
 
-    fun installDaemon() {
+    private fun installDaemon() {
         AdbController.sendCommand("pm install ${DAEMON_APK_LOCAL_PATH}${DAEMON_APK_NAME}\n")
     }
 
-    fun pushDaemonApk() {
+    private fun pushDaemonApk() {
         val assetsManager = context.resources.assets
         var inputStream = assetsManager.open(DAEMON_APK_NAME)
         AdbController.pushFile(inputStream, "${DAEMON_APK_LOCAL_PATH}${DAEMON_APK_NAME}")
@@ -84,5 +112,10 @@ object DaemonClient {
 
     fun launchDaemon() {
         AdbController.sendCommand("am broadcast -n $DAEMON_STARTER\n")
+    }
+
+    interface DeviceRequestInterface {
+        @GET("device")
+        fun getDeviceInfo(): LiveData<ResponseBean<DeviceInfo>>
     }
 }

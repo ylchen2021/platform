@@ -243,7 +243,7 @@ object AdbController {
                     adbSyncStream?.write(tmp)
                 }
                 sent += read.toLong()
-                Logger.d(TAG, "push sent=${sent/1024}")
+                Logger.d(TAG, "push sent=${sent/1024}KB")
             }
 
             adbSyncStream?.write(ByteUtils.concat("DONE".toByteArray(), ByteUtils.intToByteArray(System.currentTimeMillis().toInt())))

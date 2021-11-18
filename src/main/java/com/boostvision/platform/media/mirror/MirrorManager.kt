@@ -1,14 +1,7 @@
 package com.boostvision.platform.media.mirror
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
 import android.media.projection.MediaProjection
-import android.media.projection.MediaProjectionManager
-import android.os.Build
-import android.util.Log
-import androidx.activity.result.ActivityResultLauncher
-import androidx.fragment.app.Fragment
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Transformations
@@ -19,7 +12,6 @@ import com.boostvision.platform.media.mirror.stream.video.VideoQuality
 import com.boostvision.platform.network.HttpClient
 import com.boostvision.platform.network.ResponseBean
 import com.boostvision.platform.utils.DeviceUtils
-import okhttp3.MultipartBody
 import retrofit2.http.*
 import java.lang.Exception
 
@@ -65,7 +57,6 @@ object MirrorManager {
         this.appContext = appContext
         mirrorRequestResult = Transformations.switchMap(mirrorRequestTrigger) {
             DaemonClient.launchDaemon()
-            Thread.sleep(500)
             val body = hashMapOf<String, String>()
             body["action"] = it.action
             body["url"] = it.url
@@ -74,7 +65,6 @@ object MirrorManager {
         }
         mirrorRequestResult.observeForever { response ->
             if (!response.isSuccess()) {
-                stop()
                 notifyEvent(MirrorEventType.ERROR, null, "mirror request error, msg=${response.errorMessage}")
             }
         }
