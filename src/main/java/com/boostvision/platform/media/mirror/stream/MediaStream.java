@@ -235,7 +235,7 @@ public abstract class MediaStream implements Stream {
 			try {
 				mPacketizer.stop();
 				mMediaCodec.stop();
-				Thread.sleep(100);
+				Thread.sleep(300);
 				mMediaCodec.release();
 				mMediaCodec = null;
 			} catch (Exception e) {

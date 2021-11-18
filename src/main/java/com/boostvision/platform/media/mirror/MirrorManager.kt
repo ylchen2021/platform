@@ -121,9 +121,9 @@ object MirrorManager {
     fun stop() {
         stopRtspServer()
         mediaProjection?.stop()
-        mirrorRequestTrigger.postValue(MirrorRequestParams("stop", ""))
         status = MirrorStatus.DISCONNECTED
         notifyEvent(MirrorEventType.STATUS, MirrorStatus.DISCONNECTED, null)
+        mirrorRequestTrigger.postValue(MirrorRequestParams("stop", ""))
     }
 
     fun isMirroring(): Boolean {

@@ -48,6 +48,8 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 	private int count = 0;
 	private int streamType = 1;
 
+	private long lastTs = 0;
+
 
 	public H264Packetizer() {
 		super();
@@ -196,9 +198,15 @@ public class H264Packetizer extends AbstractPacketizer implements Runnable {
 			super.send(rtphl+stapa.length);
 		}
 
+
+		long currentTs = ((MediaCodecInputStream)is).getLastBufferInfo().presentationTimeUs/1000;
+		long deltaTs = currentTs - lastTs;
+		Log.d(TAG, "send delta=" + (deltaTs));
+		lastTs = currentTs;
+
 		//Log.d(TAG,"- Nal unit length: " + naluLength + " delay: "+delay/1000000+" type: "+type);
 
-		// Small NAL unit => Single NAL unit 
+		// Small NAL unit => Single NAL unit
 		if (naluLength<=MAXPACKETSIZE-rtphl-2) {
 			buffer = socket.requestBuffer();
 			buffer[rtphl] = header[4];
