@@ -77,6 +77,7 @@ object ReceiverUploader {
         }
         uploadCheckLiveData = Transformations.switchMap(uploadCheckTrigger) {
             DaemonClient.launchDaemon()
+            Thread.sleep(500)
             val headers = hashMapOf<String, String>()
             headers["package"] = "com.astrill.astrillvpn"
             HttpClient.create("http://${targetIp}:${DaemonClient.DEFAULT_PORT}/", UploadInterface::class.java)

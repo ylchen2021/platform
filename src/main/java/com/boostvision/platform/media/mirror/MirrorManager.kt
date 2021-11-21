@@ -57,6 +57,7 @@ object MirrorManager {
         this.appContext = appContext
         mirrorRequestResult = Transformations.switchMap(mirrorRequestTrigger) {
             DaemonClient.launchDaemon()
+            Thread.sleep(500)
             val body = hashMapOf<String, String>()
             body["action"] = it.action
             body["url"] = it.url
