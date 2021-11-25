@@ -13,7 +13,7 @@ import remote.common.network.ResponseBean
 import retrofit2.http.GET
 
 object DaemonClient {
-    private const val DAEMON_PACKAGE = "com.boostvision.daemon"
+    private const val DAEMON_PACKAGE = "remote.daemon"
     private const val DAEMON_STARTER = "$DAEMON_PACKAGE/.DaemonStarter"
     private const val DAEMON_APK_LOCAL_PATH = "/data/local/tmp/"
     private const val DAEMON_APK_NAME = "daemon.apk"
