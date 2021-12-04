@@ -133,8 +133,7 @@ public class AACStream extends AudioStream {
 		// If he did, we force a reasonable one: 16 kHz
 		if (i>12) mQuality.samplingRate = 16000;
 
-		if (mMode != mRequestedMode || mPacketizer==null) {
-			mMode = mRequestedMode;
+		if (mPacketizer==null) {
 			mPacketizer = new AACLATMPacketizer();
 			mPacketizer.setDestination(mDestination, mRtpPort, mRtcpPort);
 			mPacketizer.getRtpSocket().setOutputStream(mOutputStream, mChannelIdentifier);
@@ -214,13 +213,11 @@ public class AACStream extends AudioStream {
 	/** Stops the stream. */
 	public synchronized void stop() {
 		if (mStreaming) {
-			if (mMode==MODE_MEDIACODEC_API) {
-				Log.d(TAG, "Interrupting threads...");
-				mThread.interrupt();
-				mAudioRecord.stop();
-				mAudioRecord.release();
-				mAudioRecord = null;
-			}
+			Log.d(TAG, "Interrupting threads...");
+			mThread.interrupt();
+			mAudioRecord.stop();
+			mAudioRecord.release();
+			mAudioRecord = null;
 			super.stop();
 		}
 	}

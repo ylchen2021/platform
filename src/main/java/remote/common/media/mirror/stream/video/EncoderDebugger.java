@@ -112,17 +112,17 @@ public class EncoderDebugger {
 	private void debug() {
 		// If testing the phone again is not needed,
 		// we just restore the result from the shared preferences
-		if (!checkTestNeeded()) {
-			String resolution = mWidth+"x"+mHeight+"-";			
-			boolean success = mPreferences.getBoolean(PREF_PREFIX+resolution+"success",false);
-			if (!success) {
-				throw new RuntimeException("Phone not supported with this resolution ("+mWidth+"x"+mHeight+")");
-			}
-			mEncoderName = mPreferences.getString(PREF_PREFIX+resolution+"encoderName", "");
-			mB64PPS = mPreferences.getString(PREF_PREFIX+resolution+"pps", "");
-			mB64SPS = mPreferences.getString(PREF_PREFIX+resolution+"sps", "");
-			return;
-		}
+//		if (!checkTestNeeded()) {
+//			String resolution = mWidth+"x"+mHeight+"-";
+//			boolean success = mPreferences.getBoolean(PREF_PREFIX+resolution+"success",false);
+//			if (!success) {
+//				throw new RuntimeException("Phone not supported with this resolution ("+mWidth+"x"+mHeight+")");
+//			}
+//			mEncoderName = mPreferences.getString(PREF_PREFIX+resolution+"encoderName", "");
+//			mB64PPS = mPreferences.getString(PREF_PREFIX+resolution+"pps", "");
+//			mB64SPS = mPreferences.getString(PREF_PREFIX+resolution+"sps", "");
+//			return;
+//		}
 
 		if (VERBOSE) Log.d(TAG, ">>>> Testing the phone for resolution "+mWidth+"x"+mHeight);
 		
@@ -136,6 +136,10 @@ public class EncoderDebugger {
 			boolean isSoft = false;
 			mEncoderName = encoders[i].name;
 			if (!mEncoderName.startsWith("OMX")) {
+				continue;
+			}
+			if (mEncoderName.equals("OMX.qcom.video.encoder.avc")) {
+				//cyl: qcom encoder performance is terrible, don't use
 				continue;
 			}
 			if (mEncoderName.startsWith("OMX.google")) {

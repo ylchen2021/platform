@@ -17,7 +17,7 @@ object DaemonClient {
     private const val DAEMON_STARTER = "$DAEMON_PACKAGE/.DaemonStarter"
     private const val DAEMON_APK_LOCAL_PATH = "/data/local/tmp/"
     private const val DAEMON_APK_NAME = "daemon.apk"
-    private const val DAEMON_VERSION = 4
+    private const val DAEMON_VERSION = 8
     const val DEFAULT_PORT = 8088
 
     private lateinit var deviceInfoResult: LiveData<ResponseBean<DeviceInfo>>

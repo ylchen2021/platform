@@ -24,9 +24,6 @@ public abstract class MediaStream implements Stream {
 
 	protected static final String TAG = "MediaStream";
 
-	/** Raw audio/video will be encoded using the MediaCodec API with buffers. */
-	public static final byte MODE_MEDIACODEC_API = 0x02;
-
 	/** A LocalSocket will be used to feed the MediaRecorder object */
 	public static final byte PIPE_API_LS = 0x01;
 	
@@ -38,8 +35,6 @@ public abstract class MediaStream implements Stream {
 
 	/** The packetizer that will read the output of the camera and send RTP packets over the networked. */
 	protected AbstractPacketizer mPacketizer = null;
-
-	protected byte mMode, mRequestedMode;
 
 	/** 
 	 * Starting lollipop the LocalSocket API cannot be used to feed a MediaRecorder object. 
@@ -148,18 +143,6 @@ public abstract class MediaStream implements Stream {
 		return mPacketizer.getRtpSocket().getLocalPorts();
 	}
 
-	public void setStreamingMethod(byte mode) {
-		mRequestedMode = mode;
-	}
-
-	/**
-	 * Returns the streaming method in use, call this after 
-	 * {@link #configure()} to get an accurate response. 
-	 */
-	public byte getStreamingMethod() {
-		return mMode;
-	}		
-	
 	/**
 	 * Returns the packetizer associated with the {@link MediaStream}.
 	 * @return The packetizer
@@ -189,7 +172,6 @@ public abstract class MediaStream implements Stream {
 			mPacketizer.setDestination(mDestination, mRtpPort, mRtcpPort);
 			mPacketizer.getRtpSocket().setOutputStream(mOutputStream, mChannelIdentifier);
 		}
-		mMode = mRequestedMode;
 		mConfigured = true;
 	}
 	
@@ -214,7 +196,6 @@ public abstract class MediaStream implements Stream {
 			try {
 				mPacketizer.stop();
 				mMediaCodec.stop();
-				Thread.sleep(300);
 				mMediaCodec.release();
 				mMediaCodec = null;
 			} catch (Exception e) {
