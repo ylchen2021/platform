@@ -23,7 +23,9 @@ package remote.common.media.mirror.stream.audio;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
+import android.media.AudioAttributes;
 import android.media.AudioFormat;
+import android.media.AudioPlaybackCaptureConfiguration;
 import android.media.AudioRecord;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -151,11 +153,31 @@ public class AACStream extends AudioStream {
 	@Override
 	@SuppressLint({ "InlinedApi", "NewApi" })
 	protected void encodeWithMediaCodec() throws IOException {
-		final int bufferSize = AudioRecord.getMinBufferSize(mQuality.samplingRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)*2;
+		final int bufferSize = AudioRecord.getMinBufferSize(mQuality.samplingRate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)*2;
 
 		((AACLATMPacketizer)mPacketizer).setSamplingRate(mQuality.samplingRate);
 
-		mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, mQuality.samplingRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+			AudioPlaybackCaptureConfiguration config =
+					new AudioPlaybackCaptureConfiguration.Builder(mMediaProjection)
+							.addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+							.addMatchingUsage(AudioAttributes.USAGE_UNKNOWN)
+							.addMatchingUsage(AudioAttributes.USAGE_GAME)
+							.build();
+			AudioFormat audioFormat = new AudioFormat.Builder()
+					.setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+					.setSampleRate(mQuality.samplingRate)
+					.setChannelMask(AudioFormat.CHANNEL_IN_STEREO)
+					.build();
+			mAudioRecord = new AudioRecord.Builder()
+					.setAudioFormat(audioFormat)
+					.setBufferSizeInBytes(bufferSize)
+					.setAudioPlaybackCaptureConfig(config)
+					.build();
+		} else {
+			mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, mQuality.samplingRate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT,
+					bufferSize);
+		}
 		try {
 			mMediaCodec = MediaCodec.createEncoderByType("audio/mp4a-latm");
 		} catch (IOException e){
@@ -165,7 +187,7 @@ public class AACStream extends AudioStream {
 		MediaFormat format = new MediaFormat();
 		format.setString(MediaFormat.KEY_MIME, "audio/mp4a-latm");
 		format.setInteger(MediaFormat.KEY_BIT_RATE, mQuality.bitRate);
-		format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 1);
+		format.setInteger(MediaFormat.KEY_CHANNEL_COUNT, 2);
 		format.setInteger(MediaFormat.KEY_SAMPLE_RATE, mQuality.samplingRate);
 		format.setInteger(MediaFormat.KEY_AAC_PROFILE, MediaCodecInfo.CodecProfileLevel.AACObjectLC);
 		format.setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, bufferSize);
@@ -277,7 +299,7 @@ public class AACStream extends AudioStream {
 		mMediaRecorder.setAudioSource(mAudioSource);
 		mMediaRecorder.setOutputFormat(mOutputFormat);
 		mMediaRecorder.setAudioEncoder(mAudioEncoder);
-		mMediaRecorder.setAudioChannels(1);
+		mMediaRecorder.setAudioChannels(2);
 		mMediaRecorder.setAudioSamplingRate(mQuality.samplingRate);
 		mMediaRecorder.setAudioEncodingBitRate(mQuality.bitRate);
 		mMediaRecorder.setOutputFile(TESTFILE);

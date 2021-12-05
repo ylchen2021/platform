@@ -124,6 +124,7 @@ public class SessionBuilder {
 			AudioStream audio = session.getAudioTrack();
 			audio.setAudioQuality(mAudioQuality);
 			audio.setDestinationPorts(5004);
+			audio.setMediaProjection(mMediaProjection);
 		}
 
 		return session;
