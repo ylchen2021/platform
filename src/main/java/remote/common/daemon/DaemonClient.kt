@@ -10,9 +10,10 @@ import remote.common.adb.AdbEventType
 import remote.common.adb.AdbStatus
 import remote.common.network.HttpClient
 import remote.common.network.ResponseBean
-import retrofit2.http.GET
+import remote.common.utils.Logger
 
 object DaemonClient {
+    private const val TAG = "DaemonClient"
     private const val DAEMON_PACKAGE = "remote.daemon"
     private const val DAEMON_STARTER = "$DAEMON_PACKAGE/.DaemonStarter"
     private const val DAEMON_APK_LOCAL_PATH = "/data/local/tmp/"
@@ -20,7 +21,7 @@ object DaemonClient {
     private const val DAEMON_VERSION = 8
     const val DEFAULT_PORT = 8088
 
-    private lateinit var deviceInfoResult: LiveData<ResponseBean<DeviceInfo>>
+    private lateinit var daemonInfoResult: LiveData<ResponseBean<DaemonInfo>>
     private val deviceInfoTrigger = MutableLiveData<String>()
     private var connectedIp = ""
     private lateinit var context: Application
@@ -68,14 +69,16 @@ object DaemonClient {
         DaemonClient.context = context
         AdbController.addEventListener(adbEventListener)
 
-        deviceInfoResult = Transformations.switchMap(deviceInfoTrigger) {
-            HttpClient.create("http://${it}:$DEFAULT_PORT/", DeviceRequestInterface::class.java)
+        daemonInfoResult = Transformations.switchMap(deviceInfoTrigger) {
+            HttpClient.create("http://${it}:$DEFAULT_PORT/", DaemonInterface::class.java)
                 .getDeviceInfo()
         }
-        deviceInfoResult.observeForever { response ->
+        daemonInfoResult.observeForever { response ->
             if (response.isSuccess()) {
+                Logger.d(TAG, "Daemon remote version=${response.data?.daemonVersion}")
                 val version = response.data?.daemonVersion?:0
                 if (DAEMON_VERSION > version) {
+                    Logger.d(TAG, "Daemon localversion=$DAEMON_VERSION, need push")
                     pushDaemonApk()
                 }
             }
@@ -112,10 +115,5 @@ object DaemonClient {
 
     fun launchDaemon() {
         AdbController.sendCommand("am broadcast -n $DAEMON_STARTER\n")
-    }
-
-    interface DeviceRequestInterface {
-        @GET("device")
-        fun getDeviceInfo(): LiveData<ResponseBean<DeviceInfo>>
     }
 }

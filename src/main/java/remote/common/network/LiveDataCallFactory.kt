@@ -1,5 +1,6 @@
 package remote.common.network
 
+import android.util.Log
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import retrofit2.*
@@ -38,7 +39,7 @@ class LiveDataCallFactory private constructor() : CallAdapter.Factory() {
     }
 
     private fun throwError() {
-        throw IllegalStateException("Response must be parametrized as " + "LiveData<ResposeResultWithErrorType<DataT,ErrorT>> or LiveData<ResposeResult<DataT>> or LiveData<DataT>")
+        throw IllegalStateException("Response must be parametrized as " + "LiveData<ResponseBean<T>>")
     }
 
     inner class LiveDataResponseCallAdapter<T> internal constructor(

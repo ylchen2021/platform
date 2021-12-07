@@ -61,7 +61,7 @@ object MirrorManager {
             val body = hashMapOf<String, String>()
             body["action"] = it.action
             body["url"] = it.url
-            HttpClient.create("http://$targetIp:${DaemonClient.DEFAULT_PORT}/", MirrorRequestInterface::class.java)
+            HttpClient.create("http://$targetIp:${DaemonClient.DEFAULT_PORT}/", MirrorInterface::class.java)
                 .mirror(body)
         }
         mirrorRequestResult.observeForever { response ->
@@ -161,11 +161,6 @@ object MirrorManager {
 
     interface MirrorEventListener {
         fun onMirrorEvent(event: MirrorEvent)
-    }
-
-    interface MirrorRequestInterface {
-        @POST("mirror")
-        fun mirror(@Body bodyMap: Map<String, String>): LiveData<ResponseBean<Any>>
     }
 
     data class MirrorRequestParams(

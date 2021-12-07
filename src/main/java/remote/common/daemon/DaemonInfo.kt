@@ -1,5 +1,5 @@
 package remote.common.daemon
 
-data class DeviceInfo (
+data class DaemonInfo (
     val daemonVersion: Int
 )
