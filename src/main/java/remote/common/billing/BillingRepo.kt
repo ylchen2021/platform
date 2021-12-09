@@ -6,15 +6,21 @@ import androidx.lifecycle.LifecycleObserver
 import androidx.lifecycle.LiveData
 
 object BillingRepo {
-    private lateinit var skuArray: Array<String>
+    private lateinit var inappSkuArray: Array<String>
+    private lateinit var subSkuArray: Array<String>
     private lateinit var billingDataSource: BillingDataSource
     private val isPurchasedMap = hashMapOf<String, LiveData<Boolean>>()
     private val canPurchaseMap = hashMapOf<String, LiveData<Boolean>>()
 
-    fun init(context: Context, skus: Array<String>) {
-        skuArray = skus
-        billingDataSource = BillingDataSource.getInstance(context, null, skuArray, null)
-        skuArray.forEach {
+    fun init(context: Context, inappSkus: Array<String>, subSkus: Array<String>) {
+        inappSkuArray = inappSkus
+        subSkuArray = subSkus
+        billingDataSource = BillingDataSource.getInstance(context, inappSkus, subSkus, null)
+        inappSkuArray.forEach {
+            isPurchasedMap[it] = billingDataSource.isPurchased(it)
+            canPurchaseMap[it] = billingDataSource.canPurchase(it)
+        }
+        subSkuArray.forEach {
             isPurchasedMap[it] = billingDataSource.isPurchased(it)
             canPurchaseMap[it] = billingDataSource.canPurchase(it)
         }
