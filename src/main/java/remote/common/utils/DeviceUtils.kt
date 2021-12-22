@@ -1,6 +1,7 @@
 package remote.common.utils
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.wifi.WifiManager
 import java.lang.Exception
 import java.lang.StringBuilder
@@ -25,5 +26,15 @@ object DeviceUtils {
         sb.append(ipInt shr 16 and 0xFF).append(".")
         sb.append(ipInt shr 24 and 0xFF)
         return sb.toString()
+    }
+
+    fun getVersionCode(context: Context): Int {
+        return try {
+            val pm = context.packageManager
+            pm.getPackageInfo(context.packageName, PackageManager.GET_CONFIGURATIONS).versionCode
+        } catch (e: PackageManager.NameNotFoundException) {
+            e.printStackTrace()
+            -1
+        }
     }
 }
