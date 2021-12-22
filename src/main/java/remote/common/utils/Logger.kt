@@ -1,10 +1,11 @@
 package remote.common.utils
 
 import android.util.Log
+import tv.remote.platform.BuildConfig
 
 object Logger {
     fun d(tag: String, msg: String) {
-        if (AppUtils.isDebug) {
+        if (BuildConfig.DEBUG) {
             Log.d(tag, msg)
         }
     }
