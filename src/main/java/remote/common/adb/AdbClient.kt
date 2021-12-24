@@ -39,9 +39,7 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
                     disconnect()
                 }
             }
-        }.start()
 
-        Thread {
             var responseBuilder = StringBuilder()
             while (adbShellStream?.isClosed == false){
                 try {
