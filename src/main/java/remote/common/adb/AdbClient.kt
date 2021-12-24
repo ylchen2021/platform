@@ -18,25 +18,30 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
     private var adbShellStream: AdbStream? = null
     private var adbSyncStream: AdbStream? = null
     private var adbConnection: AdbConnection? = null
-    private var readThread: Thread? = null
     private var status = AdbStatus.DISCONNECTED
+    private var socket: Socket? = null
 
     fun connect() {
         changeStatus(AdbStatus.CONNECTING)
-        try {
-            var socket = Socket(targetIp, targetPort)
-            adbConnection = AdbConnection.create(socket, adbCrypto)
-            adbConnection?.connect()
-            adbShellStream = adbConnection?.open("shell:")
-        } catch (e: Exception) {
-            e.printStackTrace()
-            var errorMsg = "connect error!"
-            Log.i(TAG, errorMsg, e)
-            controller.notifyEvent(AdbEventType.ERROR, null, errorMsg)
-            disconnect()
-        }
-        changeStatus(AdbStatus.CONNECTED)
-        readThread = Thread(Runnable {
+        Thread {
+            try {
+                socket = Socket(targetIp, targetPort)
+                adbConnection = AdbConnection.create(socket, adbCrypto)
+                adbConnection?.connect()
+                adbShellStream = adbConnection?.open("shell:")
+                changeStatus(AdbStatus.CONNECTED)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                var errorMsg = "connect error!"
+                Log.i(TAG, errorMsg, e)
+                if (!isDisconnected()) {
+                    controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CONNECT_FAILED, errorMsg)
+                    disconnect()
+                }
+            }
+        }.start()
+
+        Thread {
             var responseBuilder = StringBuilder()
             while (adbShellStream?.isClosed == false){
                 try {
@@ -48,22 +53,27 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
                         responseBuilder.append(response)
                         var fullResponse = responseBuilder.toString()
                         Logger.d(TAG, "response=${fullResponse}")
-                        controller.notifyEvent(AdbEventType.RESPONSE, null, fullResponse)
+                        controller.sendEvent(AdbEventType.RESPONSE, null, fullResponse)
                         responseBuilder = StringBuilder()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
-                    disconnect()
-                    return@Runnable
+                    if (!isDisconnected()) {
+                        controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "connection closed")
+                        disconnect()
+                    }
                 }
             }
-        })
-        readThread?.start()
+        }.start()
     }
 
     private fun changeStatus(adbStatus: AdbStatus) {
         status = adbStatus
-        controller.notifyEvent(AdbEventType.STATUS, adbStatus, targetIp)
+        controller.sendEvent(AdbEventType.STATUS, adbStatus, targetIp)
+    }
+
+    private fun isDisconnected(): Boolean {
+        return status == AdbStatus.DISCONNECTED
     }
 
     fun disconnect() {
@@ -79,6 +89,9 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
             adbConnection?.close()
             adbConnection = null
         }
+        if (socket != null) {
+            socket?.close()
+        }
         changeStatus(AdbStatus.DISCONNECTED)
     }
 
@@ -87,10 +100,16 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
     }
 
     fun write(command: String) {
+        if (isDisconnected()) {
+            return
+        }
         adbShellStream?.write(command.toByteArray())
     }
 
     fun push(inputStream: InputStream, remotePath: String): Boolean {
+        if (isDisconnected()) {
+            return false
+        }
         var result = false
         try {
             if (adbSyncStream == null) {
@@ -136,6 +155,8 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
             result = String(res!!).startsWith("OKAY")
             adbSyncStream?.write(ByteUtils.concat("QUIT".toByteArray(), ByteUtils.intToByteArray(0)))
         } catch (e: Exception) {
+            controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "push failed")
+            disconnect()
             e.printStackTrace()
             return false
         }

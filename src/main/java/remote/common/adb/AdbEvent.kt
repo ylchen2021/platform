@@ -2,8 +2,8 @@ package remote.common.adb
 
 data class AdbEvent(
     val eventType: AdbEventType,
-    val status: AdbStatus?,
-    val param: Any
+    val status: Any?,
+    val param: Any?
 )
 
 enum class AdbEventType {
@@ -17,4 +17,9 @@ enum class AdbStatus {
     CONNECTING,
     CONNECTED,
     DISCONNECTED
+}
+
+enum class AdbErrorType {
+    CONNECT_FAILED,
+    CLOSED
 }

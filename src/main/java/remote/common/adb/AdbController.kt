@@ -8,14 +8,8 @@ import android.util.Base64
 import android.util.Log
 import remote.common.utils.Logger
 import com.cgutman.adblib.AdbBase64
-import com.cgutman.adblib.AdbConnection
 import com.cgutman.adblib.AdbCrypto
-import com.cgutman.adblib.AdbStream
-import remote.common.utils.ByteUtils
 import java.io.*
-import java.lang.StringBuilder
-import java.net.Socket
-import java.nio.charset.Charset
 
 object AdbController {
     private const val TAG = "AdbController"
@@ -30,6 +24,7 @@ object AdbController {
     private var MSG_DISCONNECT = 2
     private var MSG_COMMAND = 3
     private var MSG_PUSH = 4
+    private var MSG_EVENT = 5
 
     fun init(context: Context) {
         adbThread.start()
@@ -41,6 +36,10 @@ object AdbController {
                     addClient(param.ip, newClient)
                     newClient.connect()
                 }
+                MSG_DISCONNECT -> {
+                    var ip = it.obj as String
+                    getClient(ip)?.disconnect()
+                }
                 MSG_COMMAND -> {
                     val command = it.obj as String
                     Logger.d(TAG, "(request)response=${command}")
@@ -48,10 +47,6 @@ object AdbController {
                     clientList.forEach { client ->
                         client?.write(command)
                     }
-                }
-                MSG_DISCONNECT -> {
-                    var ip = it.obj as String
-                    getClient(ip)?.disconnect()
                 }
                 MSG_PUSH -> {
                     var param = it.obj as PushParam
@@ -62,6 +57,10 @@ object AdbController {
                             notifyEvent(AdbEventType.FILE_PUSHED, null, result)
                         }
                     }
+                }
+                MSG_EVENT -> {
+                    var param = it.obj as AdbEventParam
+                    notifyEvent(param.type, param.status, param.param)
                 }
             }
             true
@@ -168,7 +167,14 @@ object AdbController {
         return c
     }
 
-    fun notifyEvent(type: AdbEventType, status: AdbStatus?, param: Any) {
+    fun sendEvent(type: AdbEventType, status: Any?, param: Any?) {
+        var msg = Message.obtain()
+        msg.what = MSG_EVENT
+        msg.obj = AdbEventParam(type, status, param)
+        adbHandler?.sendMessage(msg)
+    }
+
+    private fun notifyEvent(type: AdbEventType, status: Any?, param: Any?) {
         eventListeners.forEach {
             it.onAdbEvent(AdbEvent(type, status, param))
         }
@@ -182,6 +188,12 @@ object AdbController {
     data class PushParam(
         var inputStream: InputStream,
         var remotePath: String
+    )
+
+    data class AdbEventParam(
+        var type: AdbEventType,
+        var status: Any?,
+        var param: Any?
     )
 
     interface AdbEventListener {
