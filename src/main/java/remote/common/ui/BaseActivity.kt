@@ -20,7 +20,7 @@ abstract class BaseActivity: AppCompatActivity() {
         resultHandler?.invoke(requestCode, resultCode, data)
     }
 
-    fun setOnActivityResultHandler(handler: (Int, Int, Intent?)->Unit) {
+    fun setOnActivityResultHandler(handler: (requestCode: Int, resultCode: Int, data: Intent?)->Unit) {
         resultHandler = handler
     }
 }
