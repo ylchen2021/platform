@@ -23,6 +23,9 @@ abstract class BaseDialog protected constructor() : DialogFragment() {
             lp.gravity = getGravity()
             window.decorView.setPadding(0, 0, 0, 0)
             window.attributes = lp
+            if (getAnimation() > 0) {
+                window.setWindowAnimations(getAnimation())
+            }
         }
         return inflater.inflate(getLayoutRes(), container, false)
     }
@@ -37,6 +40,10 @@ abstract class BaseDialog protected constructor() : DialogFragment() {
 
     protected open fun getLayoutHeight(): Int {
         return ViewGroup.LayoutParams.WRAP_CONTENT
+    }
+
+    protected open fun getAnimation(): Int {
+        return 0
     }
 
     protected abstract fun getLayoutRes(): Int
