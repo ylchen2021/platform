@@ -6,6 +6,7 @@ import com.cgutman.adblib.AdbCrypto
 import com.cgutman.adblib.AdbStream
 import remote.common.utils.ByteUtils
 import remote.common.utils.Logger
+import java.io.IOException
 import java.io.InputStream
 import java.lang.StringBuilder
 import java.net.Socket
@@ -75,20 +76,36 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
     }
 
     fun disconnect() {
-        if (adbShellStream != null) {
-            adbShellStream?.close()
-            adbShellStream = null
+        try {
+            if (adbShellStream != null) {
+                adbShellStream?.close()
+                adbShellStream = null
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
-        if (adbSyncStream != null) {
-            adbSyncStream?.close()
-            adbSyncStream = null
+        try {
+            if (adbSyncStream != null) {
+                adbSyncStream?.close()
+                adbSyncStream = null
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
-        if (adbConnection != null) {
-            adbConnection?.close()
-            adbConnection = null
+        try {
+            if (adbConnection != null) {
+                adbConnection?.close()
+                adbConnection = null
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
-        if (socket != null) {
-            socket?.close()
+        try {
+            if (socket != null) {
+                socket?.close()
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
         changeStatus(AdbStatus.DISCONNECTED)
     }

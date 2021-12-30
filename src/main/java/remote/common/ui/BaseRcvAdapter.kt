@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
+import remote.common.utils.setFastOnClickListener
 
 
 abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dataList:List<T>):
@@ -25,7 +26,7 @@ abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dat
 
     override fun onBindViewHolder(holder: BaseViewHolder, position: Int) {
         onBindView(holder.itemView, position, dataList[position])
-        holder.itemView.setOnClickListener {
+        holder.itemView.setFastOnClickListener {
             onItemClickListener?.invoke(holder.itemView, dataList[position])
         }
     }

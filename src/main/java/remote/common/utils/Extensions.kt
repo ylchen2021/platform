@@ -46,3 +46,21 @@ fun View.animatePosition(xDst: Float, yDst: Float, duration: Long, decelerate: B
     animator.addListener(listenerAdapter)
     animator.start()
 }
+
+fun View.setFastOnClickListener(action: (view: View?) -> Unit) {
+    setOnClickListener(FastCilickListener(action))
+}
+
+private class FastCilickListener(val action: (view: View?) -> Unit) : View.OnClickListener {
+    override fun onClick(view: View?) {
+        val clickTimeStamp = System.currentTimeMillis()
+        if (clickTimeStamp - timeStamp < BLOCKING_OF_TIME) return
+        action.invoke(view)
+        timeStamp = clickTimeStamp
+    }
+
+    companion object {
+        var timeStamp = 0L
+        const val BLOCKING_OF_TIME = 500
+    }
+}
