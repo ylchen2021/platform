@@ -1,4 +1,4 @@
-package remote.common.billing
+package remote.common.firebase.billing
 
 import android.content.Context
 import androidx.room.*

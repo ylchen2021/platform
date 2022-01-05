@@ -1,7 +1,5 @@
-package remote.common.config
+package remote.common.firebase.config
 
-import android.util.Log
-import android.widget.Toast
 import com.google.firebase.ktx.Firebase
 import com.google.firebase.remoteconfig.FirebaseRemoteConfig
 import com.google.firebase.remoteconfig.ktx.remoteConfig

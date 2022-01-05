@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package remote.common.billing;
+package remote.common.firebase.billing;
 
 import android.app.Activity;
 import android.content.Context;
@@ -54,8 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import kotlin.Unit;
-import kotlin.jvm.functions.Function1;
+import remote.common.firebase.billing.BillingCache;
 
 /**
  * The BillingDataSource implements all billing functionality for our test application. Purchases
@@ -119,6 +118,8 @@ public class BillingDataSource implements LifecycleObserver, PurchasesUpdatedLis
     final private SingleMediatorLiveEvent<List<String>> purchaseConsumed =
             new SingleMediatorLiveEvent<>();
     final private MutableLiveData<Boolean> billingFlowInProcess = new MutableLiveData<>();
+    // cyl add for notifying billing result to listener
+    final private MutableLiveData<Integer> launchingBillingResult = new MutableLiveData<>();
     // how long before the data source tries to reconnect to Google play
     private long reconnectMilliseconds = RECONNECT_TIMER_START_MILLISECONDS;
     // when was the last successful SkuDetailsResponse?
@@ -804,6 +805,10 @@ public class BillingDataSource implements LifecycleObserver, PurchasesUpdatedLis
         return billingFlowInProcess;
     }
 
+    public LiveData<Integer> getLaunchingBillingResult() {
+        return launchingBillingResult;
+    }
+
     /**
      * Called by the BillingLibrary when new purchases are detected; typically in response to a
      * launchBillingFlow.
@@ -814,6 +819,7 @@ public class BillingDataSource implements LifecycleObserver, PurchasesUpdatedLis
     @Override
     public void onPurchasesUpdated(@NonNull BillingResult billingResult,
             @Nullable List<Purchase> list) {
+        launchingBillingResult.postValue(billingResult.getResponseCode());
         switch (billingResult.getResponseCode()) {
             case BillingClient.BillingResponseCode.OK:
                 if (null != list) {

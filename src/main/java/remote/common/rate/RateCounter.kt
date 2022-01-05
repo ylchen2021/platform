@@ -3,6 +3,7 @@ package remote.common.rate
 import android.content.Context
 import android.content.SharedPreferences
 import remote.common.utils.DeviceUtils
+import remote.common.utils.TimeUtils
 
 object RateCounter {
     const val ACTION_SHOW_RATE = "ACTION_SHOW_RATE"
@@ -53,7 +54,7 @@ object RateCounter {
     }
 
     fun recordToday() {
-        var day = (System.currentTimeMillis() / (1000*3600*24)).toInt()
+        var day = TimeUtils.getCurrentDay()
         if (!recordList.contains(day)) {
             recordList.add(day)
             val editor = sp.edit()
@@ -72,7 +73,7 @@ object RateCounter {
     }
 
     fun canShowRate(): Boolean {
-        var currentDay = (System.currentTimeMillis() / (1000 * 3600 * 24)).toInt()
+        var currentDay = TimeUtils.getCurrentDay()
         var validStart = currentDay - PERIOD
         var listDays = mutableListOf<Int>()
         recordList.forEach {

@@ -60,7 +60,7 @@ object AdbController {
                 }
                 MSG_EVENT -> {
                     var param = it.obj as AdbEventParam
-                    notifyEvent(param.type, param.status, param.param)
+                    notifyEvent(param.type, param.subType, param.param)
                 }
             }
             true
@@ -167,16 +167,16 @@ object AdbController {
         return c
     }
 
-    fun sendEvent(type: AdbEventType, status: Any?, param: Any?) {
+    fun sendEvent(type: AdbEventType, subType: Any?, param: Any?) {
         var msg = Message.obtain()
         msg.what = MSG_EVENT
-        msg.obj = AdbEventParam(type, status, param)
+        msg.obj = AdbEventParam(type, subType, param)
         adbHandler?.sendMessage(msg)
     }
 
-    private fun notifyEvent(type: AdbEventType, status: Any?, param: Any?) {
+    private fun notifyEvent(type: AdbEventType, subType: Any?, param: Any?) {
         eventListeners.forEach {
-            it.onAdbEvent(AdbEvent(type, status, param))
+            it.onAdbEvent(AdbEvent(type, subType, param))
         }
     }
 
@@ -192,7 +192,7 @@ object AdbController {
 
     data class AdbEventParam(
         var type: AdbEventType,
-        var status: Any?,
+        var subType: Any?,
         var param: Any?
     )
 

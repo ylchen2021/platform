@@ -1,4 +1,4 @@
-package remote.common.billing
+package remote.common.firebase.billing
 
 import android.app.Activity
 import android.content.Context
@@ -36,6 +36,10 @@ object BillingRepo {
 
     fun launchBilling(activity: Activity, sku: String, upgradeSku: String? = null) {
         billingDataSource.launchBillingFlow(activity, sku, upgradeSku)
+    }
+
+    fun getLaunchingBillingResult(): LiveData<Int> {
+        return billingDataSource.launchingBillingResult
     }
 
     fun refreshStatus() {

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package remote.common.billing;
+package remote.common.firebase.billing;
 /*
  * This class is an sample of how you can check to make sure your purchases on the device came
  * from Google Play. Putting code like this on your server will provide additional protection.
