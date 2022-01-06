@@ -19,8 +19,11 @@ abstract class BaseRcvAdapter<T: Any>(private var layoutId: Int, private var dat
 
     protected abstract fun onBindView(itemView: View, position: Int, data: T)
 
+    protected open fun onCreateView(itemView: View) {}
+
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): BaseViewHolder {
         val itemView: View = LayoutInflater.from(parent.context).inflate(layoutId, parent, false)
+        onCreateView(itemView)
         return BaseViewHolder(itemView)
     }
 

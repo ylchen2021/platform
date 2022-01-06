@@ -13,11 +13,8 @@ object Analytics {
     }
 
     fun logEvent(eventName: String, bundle: Bundle? = null) {
-        if (bundle == null) {
-            firebaseAnalytics.logEvent(eventName, Bundle())
-        } else {
-            firebaseAnalytics.logEvent(eventName, bundle)
-        }
-
+        var bundleNotNull = bundle ?: Bundle()
+        firebaseAnalytics.logEvent(eventName, bundleNotNull)
+        EventCache.addLog(eventName, bundleNotNull)
     }
 }
