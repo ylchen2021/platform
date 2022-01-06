@@ -1,6 +1,5 @@
 package remote.common.debug
 
-import android.app.Activity
 import android.content.Context
 import android.graphics.PixelFormat
 import android.view.Gravity
@@ -13,6 +12,8 @@ import remote.common.firebase.analytics.EventCache
 import tv.remote.platform.R
 
 object DebugMenu {
+    const val enable = true
+
     fun attach(activity: FragmentActivity) {
         val debugMenu = LayoutInflater.from(activity).inflate(R.layout.menu_debug, null, false)
         debugMenu.findViewById<View>(R.id.tv_events).setOnClickListener {

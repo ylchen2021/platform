@@ -12,9 +12,7 @@ object Analytics {
         firebaseAnalytics = Firebase.analytics
     }
 
-    fun logEvent(eventName: String, bundle: Bundle? = null) {
-        var bundleNotNull = bundle ?: Bundle()
-        firebaseAnalytics.logEvent(eventName, bundleNotNull)
-        EventCache.addLog(eventName, bundleNotNull)
+    fun logEvent(eventName: String, bundle: Bundle) {
+        firebaseAnalytics.logEvent(eventName, bundle)
     }
 }
