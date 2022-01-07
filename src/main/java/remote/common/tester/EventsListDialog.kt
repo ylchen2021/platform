@@ -1,4 +1,4 @@
-package remote.common.debug
+package remote.common.tester
 
 import android.os.Bundle
 import android.view.Gravity
