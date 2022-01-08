@@ -1,5 +1,8 @@
 package remote.common.adb
 
+import android.os.Handler
+import android.os.HandlerThread
+import android.os.Message
 import android.util.Log
 import com.cgutman.adblib.AdbConnection
 import com.cgutman.adblib.AdbCrypto
@@ -14,15 +17,80 @@ import java.nio.charset.Charset
 
 class AdbClient(private val targetIp: String, private val targetPort: Int, private val adbCrypto: AdbCrypto?, private val controller: AdbController) {
     companion object {
-        const val TAG = "AdbClient"
+        private const val TAG = "AdbClient"
+        private const val MSG_CONNECT = 1
+        private const val MSG_DISCONNECT = 2
+        private const val MSG_COMMAND = 3
+        private const val MSG_PUSH = 4
+        var id = 1
     }
     private var adbShellStream: AdbStream? = null
     private var adbSyncStream: AdbStream? = null
     private var adbConnection: AdbConnection? = null
     private var status = AdbStatus.DISCONNECTED
     private var socket: Socket? = null
+    private var adbThread: HandlerThread = HandlerThread("adb_client_thread_${id++}")
+    private var adbHandler: Handler? = null
+
+    init {
+        adbThread.start()
+        adbHandler = Handler(adbThread.looper) {
+            when (it.what) {
+                MSG_CONNECT -> {
+                    handleConnect()
+                }
+                MSG_DISCONNECT -> {
+                    handleDisconnect()
+                }
+                MSG_COMMAND -> {
+                    val command = it.obj as String
+                    handleCommand(command)
+                }
+                MSG_PUSH -> {
+                    var param = it.obj as PushParam
+                    handlePush(param.inputStream, param.remotePath)
+                }
+            }
+            true
+        }
+    }
 
     fun connect() {
+        var msg = Message.obtain()
+        msg.what = MSG_CONNECT
+        adbHandler?.sendMessage(msg)
+    }
+
+    fun disconnect() {
+        var msg = Message.obtain()
+        msg.what = MSG_DISCONNECT
+        adbHandler?.sendMessage(msg)
+    }
+
+    fun release() {
+        adbHandler?.removeCallbacksAndMessages(null)
+        adbThread.looper.quit()
+    }
+
+    fun sendCommand(command: String) {
+        if (command.isEmpty()) {
+            Log.e(TAG, "sendCommand cmd is empty")
+            return
+        }
+        var msg = Message.obtain()
+        msg.what = MSG_COMMAND
+        msg.obj = command
+        adbHandler?.sendMessage(msg)
+    }
+
+    fun pushFile(inputStream: InputStream, remotePath: String) {
+        var msg = Message.obtain()
+        msg.what = MSG_PUSH
+        msg.obj = PushParam(inputStream, remotePath)
+        adbHandler?.sendMessage(msg)
+    }
+
+    private fun handleConnect() {
         changeStatus(AdbStatus.CONNECTING)
         Thread {
             try {
@@ -36,7 +104,7 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
                 var errorMsg = "connect error!"
                 Log.i(TAG, errorMsg, e)
                 if (!isDisconnected()) {
-                    controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CONNECT_FAILED, errorMsg)
+                    notifyEvent(AdbEventType.ERROR, AdbErrorType.CONNECT_FAILED, errorMsg)
                     disconnect()
                 }
             }
@@ -52,13 +120,13 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
                         responseBuilder.append(response)
                         var fullResponse = responseBuilder.toString()
                         Logger.d(TAG, "response=${fullResponse}")
-                        controller.sendEvent(AdbEventType.RESPONSE, null, fullResponse)
+                        notifyEvent(AdbEventType.RESPONSE, null, fullResponse)
                         responseBuilder = StringBuilder()
                     }
                 } catch (e: Exception) {
                     e.printStackTrace()
                     if (!isDisconnected()) {
-                        controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "connection closed")
+                        notifyEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "connection closed")
                         disconnect()
                     }
                 }
@@ -66,16 +134,20 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
         }.start()
     }
 
+    private fun notifyEvent(type: AdbEventType, subType: Any?, param: Any?) {
+        controller.notifyEvent(targetIp, type, subType, param)
+    }
+
     private fun changeStatus(adbStatus: AdbStatus) {
         status = adbStatus
-        controller.sendEvent(AdbEventType.STATUS, adbStatus, targetIp)
+        notifyEvent(AdbEventType.STATUS, adbStatus, null)
     }
 
     private fun isDisconnected(): Boolean {
         return status == AdbStatus.DISCONNECTED
     }
 
-    fun disconnect() {
+    private fun handleDisconnect() {
         try {
             if (adbShellStream != null) {
                 adbShellStream?.close()
@@ -114,16 +186,17 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
         return status
     }
 
-    fun write(command: String) {
+    private fun handleCommand(command: String) {
         if (isDisconnected()) {
             return
         }
         adbShellStream?.write(command.toByteArray())
     }
 
-    fun push(inputStream: InputStream, remotePath: String): Boolean {
+    private fun handlePush(inputStream: InputStream, remotePath: String) {
         if (isDisconnected()) {
-            return false
+            notifyEvent(AdbEventType.FILE_PUSHED, null, false)
+            return
         }
         var result = false
         try {
@@ -170,11 +243,16 @@ class AdbClient(private val targetIp: String, private val targetPort: Int, priva
             result = String(res!!).startsWith("OKAY")
             adbSyncStream?.write(ByteUtils.concat("QUIT".toByteArray(), ByteUtils.intToByteArray(0)))
         } catch (e: Exception) {
-            controller.sendEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "push failed")
+            notifyEvent(AdbEventType.ERROR, AdbErrorType.CLOSED, "push failed")
             disconnect()
             e.printStackTrace()
-            return false
+            notifyEvent(AdbEventType.FILE_PUSHED, null, false)
         }
-        return result
+        notifyEvent(AdbEventType.FILE_PUSHED, null, result)
     }
+
+    data class PushParam(
+        var inputStream: InputStream,
+        var remotePath: String
+    )
 }

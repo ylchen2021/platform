@@ -1,6 +1,7 @@
 package remote.common.adb
 
 data class AdbEvent(
+    val ip: String,
     val eventType: AdbEventType,
     val subType: Any?,
     val param: Any?

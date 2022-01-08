@@ -15,56 +15,14 @@ object AdbController {
     private const val TAG = "AdbController"
     private val base64Impl = AdbBase64 { arg0 -> Base64.encodeToString(arg0, Base64.NO_WRAP) }
     private var adbCrypto: AdbCrypto? = null
-    private var adbThread = HandlerThread("adb_thread")
+    private var adbThread = HandlerThread("adb_controller_thread")
     private var adbHandler: Handler? = null
     private var eventListeners: MutableList<AdbEventListener> = arrayListOf()
     private val clientsMap = hashMapOf<String, AdbClient>()
 
-    private var MSG_CONNECT = 1
-    private var MSG_DISCONNECT = 2
-    private var MSG_COMMAND = 3
-    private var MSG_PUSH = 4
-    private var MSG_EVENT = 5
-
     fun init(context: Context) {
         adbThread.start()
-        adbHandler = Handler(adbThread.looper) {
-            when (it.what) {
-                MSG_CONNECT -> {
-                    val param = it.obj as AdbConnectParam
-                    val newClient = AdbClient(param.ip, param.port, adbCrypto, this)
-                    addClient(param.ip, newClient)
-                    newClient.connect()
-                }
-                MSG_DISCONNECT -> {
-                    var ip = it.obj as String
-                    getClient(ip)?.disconnect()
-                }
-                MSG_COMMAND -> {
-                    val command = it.obj as String
-                    Logger.d(TAG, "(request)response=${command}")
-                    val clientList = getConnectedClient()
-                    clientList.forEach { client ->
-                        client?.write(command)
-                    }
-                }
-                MSG_PUSH -> {
-                    var param = it.obj as PushParam
-                    val clientList = getConnectedClient()
-                    clientList.forEach { client ->
-                        if (client != null) {
-                            var result = client.push(param.inputStream, param.remotePath)
-                            notifyEvent(AdbEventType.FILE_PUSHED, null, result)
-                        }
-                    }
-                }
-                MSG_EVENT -> {
-                    var param = it.obj as AdbEventParam
-                    notifyEvent(param.type, param.subType, param.param)
-                }
-            }
-            true
-        }
+        adbHandler = Handler(adbThread.looper)
         adbCrypto = setupCrypto(context.filesDir, "pub.key", "priv.key")
     }
 
@@ -73,6 +31,7 @@ object AdbController {
             if (it.getStatus() == AdbStatus.CONNECTED) {
                 it.disconnect()
             }
+            it.release()
         }
         adbHandler?.removeCallbacksAndMessages(null)
         adbThread.looper.quit()
@@ -90,46 +49,29 @@ object AdbController {
         }
     }
 
-    fun connect(deviceIp: String, devicePort: Int) {
-        var msg = Message.obtain()
-        msg.what = MSG_CONNECT
-        msg.obj = AdbConnectParam(deviceIp, devicePort)
-        adbHandler?.sendMessage(msg)
+    fun connect(ip: String, port: Int) {
+        var client = getClient(ip)
+        if (client == null) {
+            client = AdbClient(ip, port, adbCrypto, this)
+            addClient(ip, client)
+        }
+        client.connect()
     }
 
     fun disconnect(ip: String) {
-        var msg = Message.obtain()
-        msg.what = MSG_DISCONNECT
-        msg.obj = ip
-        adbHandler?.sendMessage(msg)
+        getClient(ip)?.disconnect()
     }
 
-    fun sendCommand(command: String) {
+    fun sendCommand(ip: String, command: String) {
         if (command.isEmpty()) {
             Log.e(TAG, "sendCommand cmd is empty")
             return
         }
-        var msg = Message.obtain()
-        msg.what = MSG_COMMAND
-        msg.obj = command
-        adbHandler?.sendMessage(msg)
+        getClient(ip)?.sendCommand(command)
     }
 
-    fun pushFile(inputStream: InputStream, remotePath: String) {
-        var msg = Message.obtain()
-        msg.what = MSG_PUSH
-        msg.obj = PushParam(inputStream, remotePath)
-        adbHandler?.sendMessage(msg)
-    }
-
-    private fun getConnectedClient(): List<AdbClient?> {
-        val outList = mutableListOf<AdbClient>()
-        clientsMap.values.forEach {
-            if (it.getStatus() == AdbStatus.CONNECTED) {
-                outList.add(it)
-            }
-        }
-        return outList
+    fun pushFile(ip: String, inputStream: InputStream, remotePath: String) {
+        getClient(ip)?.pushFile(inputStream, remotePath)
     }
 
     private fun getClient(ip: String): AdbClient? {
@@ -167,34 +109,13 @@ object AdbController {
         return c
     }
 
-    fun sendEvent(type: AdbEventType, subType: Any?, param: Any?) {
-        var msg = Message.obtain()
-        msg.what = MSG_EVENT
-        msg.obj = AdbEventParam(type, subType, param)
-        adbHandler?.sendMessage(msg)
-    }
-
-    private fun notifyEvent(type: AdbEventType, subType: Any?, param: Any?) {
-        eventListeners.forEach {
-            it.onAdbEvent(AdbEvent(type, subType, param))
+    fun notifyEvent(ip: String, type: AdbEventType, subType: Any?, param: Any?) {
+        adbHandler?.post {
+            eventListeners.forEach {
+                it.onAdbEvent(AdbEvent(ip, type, subType, param))
+            }
         }
     }
-
-    data class AdbConnectParam(
-        val ip: String,
-        val port: Int
-    )
-
-    data class PushParam(
-        var inputStream: InputStream,
-        var remotePath: String
-    )
-
-    data class AdbEventParam(
-        var type: AdbEventType,
-        var subType: Any?,
-        var param: Any?
-    )
 
     interface AdbEventListener {
         fun onAdbEvent(adbEvent: AdbEvent)
