@@ -14,9 +14,9 @@ enum class AdbEventType {
 }
 
 enum class AdbStatus {
+    DISCONNECTED,
     CONNECTING,
     CONNECTED,
-    DISCONNECTED
 }
 
 enum class AdbErrorType {
