@@ -11,7 +11,7 @@ object ConfigManager {
 
     fun init(defaultValueRes: Int, resultAction: ((Boolean)->Unit)) {
         remoteConfig = Firebase.remoteConfig
-        if (BuildConfig.DEBUG) {
+        if (BuildConfig.INTERNAL) {
             val configSettings = remoteConfigSettings {
                 minimumFetchIntervalInSeconds = 0
             }

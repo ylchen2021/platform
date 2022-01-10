@@ -25,6 +25,17 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    flavorDimensions 'user'
+    productFlavors {
+        internal {
+            dimension 'user'
+            buildConfigField "boolean", "INTERNAL", "true"
+        }
+        normal {
+            dimension 'user'
+            buildConfigField "boolean", "INTERNAL", "false"
+        }
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
