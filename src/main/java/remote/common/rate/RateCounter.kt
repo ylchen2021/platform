@@ -1,11 +1,14 @@
 package remote.common.rate
 
 import android.content.Context
-import android.content.SharedPreferences
 import remote.common.utils.DeviceUtils
+import remote.common.utils.SPUtils
 import remote.common.utils.TimeUtils
 
 object RateCounter {
+    private const val SP_NAME = "rate_counter"
+    private lateinit var spUtils: SPUtils
+
     const val ACTION_SHOW_RATE = "ACTION_SHOW_RATE"
 
     private const val SP_RATE_RECORD = "SP_RATE_RECORD"
@@ -14,31 +17,28 @@ object RateCounter {
     private var PERIOD = 7
     private var TIMES_IN_PERIOD = 3
     private var TIMES_MAX = 1
-    private lateinit var sp: SharedPreferences
     private var recordList = mutableListOf<Int>()
     private var rateTimes = 0
     private var currentVersion = 0
     private var disableDay = 0
 
-    fun init(context: Context, sharedPreferences: SharedPreferences) {
-        sp = sharedPreferences
-        val recordStrList = sp.getString(SP_RATE_RECORD, "")?.split("#")
+    fun init(context: Context) {
+        spUtils = SPUtils(context, SP_NAME)
+        val recordStrList = spUtils.getString(SP_RATE_RECORD, "")?.split("#")
         recordStrList?.forEach {
             if (it.isNotEmpty()) {
                 recordList.add(it.toInt())
             }
         }
         currentVersion = DeviceUtils.getVersionCode(context)
-        val rateTimesStr = sp.getString(SP_RATE_TIMES, "$currentVersion:0")?.split(":")
+        val rateTimesStr = spUtils.getString(SP_RATE_TIMES, "$currentVersion:0")?.split(":")
         if (currentVersion != rateTimesStr?.get(0)?.toInt()) {
-            val editor = sp.edit()
-            editor.putString(SP_RATE_TIMES, "$currentVersion:0")
-            editor.apply()
+            spUtils.saveString(SP_RATE_TIMES, "$currentVersion:0")
             rateTimes = 0
         } else {
             rateTimes = rateTimesStr.get(1).toInt()
         }
-        val disableDayStr = sp.getString(SP_DISABLE_RECORD_DAY, "")
+        val disableDayStr = spUtils.getString(SP_DISABLE_RECORD_DAY, "")
         if (disableDayStr != null && disableDayStr.isNotEmpty()) {
             disableDay = disableDayStr.toInt()
         } else {
@@ -65,9 +65,7 @@ object RateCounter {
         var day = TimeUtils.getCurrentDay()
         if (!recordList.contains(day) && !isDisableRecord()) {
             recordList.add(day)
-            val editor = sp.edit()
-            editor.putString(SP_RATE_RECORD, recordList.joinToString("#"))
-            editor.apply()
+            spUtils.saveString(SP_RATE_RECORD, recordList.joinToString("#"))
         }
     }
 
@@ -77,9 +75,7 @@ object RateCounter {
         } else if (TimeUtils.getCurrentDay() == disableDay) {
             return true
         } else {
-            val editor = sp.edit()
-            editor.putString(SP_DISABLE_RECORD_DAY, "")
-            editor.apply()
+            spUtils.saveString(SP_DISABLE_RECORD_DAY, "")
             disableDay = 0
             return false
         }
@@ -89,11 +85,9 @@ object RateCounter {
         recordList.clear()
         disableDay = TimeUtils.getCurrentDay()
         rateTimes++
-        val editor = sp.edit()
-        editor.putString(SP_RATE_RECORD, "")
-        editor.putString(SP_RATE_TIMES, "${currentVersion}:$rateTimes")
-        editor.putString(SP_DISABLE_RECORD_DAY, TimeUtils.getCurrentDay().toString())
-        editor.apply()
+        spUtils.saveString(SP_RATE_RECORD, "")
+        spUtils.saveString(SP_RATE_TIMES, "${currentVersion}:$rateTimes")
+        spUtils.saveString(SP_DISABLE_RECORD_DAY, TimeUtils.getCurrentDay().toString())
     }
 
     fun canShowRate(): Boolean {

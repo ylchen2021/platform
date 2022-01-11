@@ -2,14 +2,10 @@ package remote.common.utils
 
 import android.content.Context
 import android.content.SharedPreferences
-import android.preference.PreferenceManager
 
-object SPUtils {
-    private lateinit var sp: SharedPreferences
+class SPUtils(context: Context, spName: String) {
+    private var sp: SharedPreferences = context.getSharedPreferences(spName, Context.MODE_PRIVATE)
 
-    fun init(context: Context) {
-        sp = PreferenceManager.getDefaultSharedPreferences(context)
-    }
     fun getBoolean(key: String, default: Boolean): Boolean {
         return sp.getBoolean(key, default)
     }
